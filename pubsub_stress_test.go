@@ -28,7 +28,7 @@ func TestPublishSubscribe_ordered_stress(t *testing.T) {
 		infrastructure.Features{
 			ConsumerGroups:      true,
 			ExactlyOnceDelivery: false,
-			GuaranteedOrder:     false,
+			GuaranteedOrder:     true,
 			Persistent:          true,
 		},
 		createPartitionedPubSub,
