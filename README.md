@@ -31,10 +31,6 @@ If you didn't find the answer to your question in [the documentation](https://wa
 
 Please join us on the `#watermill` channel on the [Gophers slack](https://gophers.slack.com/): You can get an invite [here](https://gophersinvite.herokuapp.com/).
 
-## Why the name?
-
-It processes streams!
-
 ## License
 
 [MIT License](./LICENSE)
