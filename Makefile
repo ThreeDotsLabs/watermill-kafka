@@ -26,6 +26,7 @@ validate_examples:
 generate_gomod:
 	rm go.mod go.sum || true
 	go mod init github.com/ThreeDotsLabs/watermill-kafka
+	# todo - change to last release
 	go get github.com/ThreeDotsLabs/watermill@master
 	go install ./...
 	sed -i '\|go |d' go.mod
