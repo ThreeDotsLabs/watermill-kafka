@@ -8,7 +8,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/infrastructure"
-	"github.com/ThreeDotsLabs/watermill/message/infrastructure/kafka"
+	"github.com/ThreeDotsLabs/watermill-kafka/pkg/kafka"
 )
 
 func BenchmarkSubscriber(b *testing.B) {
