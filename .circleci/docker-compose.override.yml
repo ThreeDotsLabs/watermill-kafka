@@ -9,7 +9,7 @@ services:
     working_dir: /app
 
     environment:
-      WATERMILL_TEST_KAFKA_BROKERS: kafka:9091,kafka:9092,kafka:9093,kafka:9094,kafka:9095
+      WATERMILL_TEST_KAFKA_BROKERS: kafka1:9091,kafka2:9092,kafka3:9093,kafka4:9094,kafka5:9095
 
   zookeeper:
     environment:
@@ -18,26 +18,26 @@ services:
   kafka1:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9091,PLAINTEXT_HOST://kafka:29091
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9091,PLAINTEXT_HOST://kafka1:29091
 
   kafka2:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://kafka:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://kafka2:29092
 
   kafka3:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://kafka:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9093,PLAINTEXT_HOST://kafka3:29093
 
   kafka4:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9094,PLAINTEXT_HOST://kafka:29094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka4:9094,PLAINTEXT_HOST://kafka4:29094
 
   kafka5:
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9095,PLAINTEXT_HOST://kafka:29095
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka5:9095,PLAINTEXT_HOST://kafka5:29095
 
 
