@@ -11,24 +11,33 @@ services:
     environment:
       WATERMILL_TEST_KAFKA_BROKERS: kafka:9091,kafka:9092,kafka:9093,kafka:9094,kafka:9095
 
+  zookeeper:
+    environment:
+      ZOOKEEPER_SERVERS: "zookeeper:2888:3888"
+
   kafka1:
     environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9091,PLAINTEXT_HOST://kafka:29091
 
   kafka2:
     environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://kafka:29092
 
   kafka3:
     environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://kafka:29093
 
   kafka4:
     environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9094,PLAINTEXT_HOST://kafka:29094
 
   kafka5:
     environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9095,PLAINTEXT_HOST://kafka:29095
 
 
