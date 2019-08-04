@@ -243,7 +243,6 @@ func (s *Subscriber) consumeGroupMessages(
 		return nil, errors.Wrap(err, "cannot create consumer group client")
 	}
 	go func() {
-		// todo - better close?
 		for err := range group.Errors() {
 			if err == nil {
 				continue
