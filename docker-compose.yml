@@ -10,7 +10,6 @@ services:
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_CLIENT_PORT: "2181"
       ZOOKEEPER_TICK_TIME: "2000"
-      ZOOKEEPER_SERVERS: "localhost:2888:3888"
     network_mode: "host"
 
   kafka1:

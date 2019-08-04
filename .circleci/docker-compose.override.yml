@@ -7,42 +7,6 @@ services:
       - .:/app
       - .mod-cache:/go/pkg/mod
     working_dir: /app
-
     environment:
-      WATERMILL_TEST_KAFKA_BROKERS: kafka1:9091,kafka2:9092,kafka3:9093,kafka4:9094,kafka5:9095
-
-  zookeeper:
-    environment:
-      ZOOKEEPER_SERVERS: "zookeeper:2888:3888"
-    network_mode: "bridge"
-
-  kafka1:
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9091,PLAINTEXT_HOST://kafka1:29091
-    network_mode: "bridge"
-
-  kafka2:
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://kafka2:29092
-    network_mode: "bridge"
-
-  kafka3:
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9093,PLAINTEXT_HOST://kafka3:29093
-    network_mode: "bridge"
-
-  kafka4:
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka4:9094,PLAINTEXT_HOST://kafka4:29094
-    network_mode: "bridge"
-
-  kafka5:
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka5:9095,PLAINTEXT_HOST://kafka5:29095
-    network_mode: "bridge"
-
+      WATERMILL_TEST_KAFKA_BROKERS: localhost:9091,localhost:9092,localhost:9093,localhost:9094,localhost:9095
+    network_mode: "host"
