@@ -9,9 +9,9 @@ import (
 	"github.com/Shopify/sarama"
 
 	"github.com/ThreeDotsLabs/watermill"
+	"github.com/ThreeDotsLabs/watermill-kafka/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/infrastructure"
-	"github.com/ThreeDotsLabs/watermill-kafka/pkg/kafka"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +20,7 @@ func kafkaBrokers() []string {
 	if brokers != "" {
 		return strings.Split(brokers, ",")
 	}
-	return []string{"localhost:9092"}
+	return []string{"localhost:9091", "localhost:9092", "localhost:9093", "localhost:9094", "localhost:9095"}
 }
 
 func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (message.Publisher, message.Subscriber) {
@@ -72,26 +72,8 @@ func createPartitionedPubSub(t *testing.T) (message.Publisher, message.Subscribe
 	return newPubSub(t, kafka.NewWithPartitioningMarshaler(generatePartitionKey), "test")
 }
 
-func createNoGroupSubscriberConstructor(t *testing.T) message.Subscriber {
-	logger := watermill.NewStdLogger(true, true)
-
-	marshaler := kafka.DefaultMarshaler{}
-
-	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	sub, err := kafka.NewSubscriber(
-		kafka.SubscriberConfig{
-			Brokers:       kafkaBrokers(),
-			ConsumerGroup: "",
-		},
-		saramaConfig,
-		marshaler,
-		logger,
-	)
-	require.NoError(t, err)
-
-	return sub
+func createNoGroupPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
+	return newPubSub(t, kafka.DefaultMarshaler{}, "")
 }
 
 func TestPublishSubscribe(t *testing.T) {
@@ -100,14 +82,6 @@ func TestPublishSubscribe(t *testing.T) {
 		ExactlyOnceDelivery: false,
 		GuaranteedOrder:     false,
 		Persistent:          true,
-	}
-
-	if infrastructure.RunOnlyFastTests() {
-		// Kafka tests are a bit slow, so let's run only basic test
-		// todo - speed up
-		t.Log("Running only TestPublishSubscribe for Kafka with -short flag")
-		infrastructure.TestPublishSubscribe(t, createPubSub, features)
-		return
 	}
 
 	infrastructure.TestPubSub(
@@ -141,5 +115,16 @@ func TestNoGroupSubscriber(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
-	infrastructure.TestNoGroupSubscriber(t, createPubSub, createNoGroupSubscriberConstructor)
+	infrastructure.TestPubSub(
+		t,
+		infrastructure.Features{
+			ConsumerGroups:                   false,
+			ExactlyOnceDelivery:              false,
+			GuaranteedOrder:                  true,
+			Persistent:                       true,
+			NewSubscriberReceivesOldMessages: true,
+		},
+		createNoGroupPubSub,
+		nil,
+	)
 }

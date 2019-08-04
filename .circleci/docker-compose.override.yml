@@ -7,11 +7,6 @@ services:
       - .:/app
       - .mod-cache:/go/pkg/mod
     working_dir: /app
-
     environment:
-      WATERMILL_TEST_KAFKA_BROKERS: kafka:9092
-
-  kafka:
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-
+      WATERMILL_TEST_KAFKA_BROKERS: localhost:9091,localhost:9092,localhost:9093,localhost:9094,localhost:9095
+    network_mode: "host"

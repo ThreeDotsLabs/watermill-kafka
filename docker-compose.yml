@@ -5,24 +5,69 @@ version: '3'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:5.0.1
-    ports:
-      - 2181:2181
     restart: unless-stopped
     environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
+    network_mode: "host"
 
-  kafka:
+  kafka1:
     image: confluentinc/cp-kafka:5.0.1
-    ports:
-      - 9092:9092
-    restart: unless-stopped
     depends_on:
       - zookeeper
+    env_file:
+      - dev/docker-kafka.env
     environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9091,PLAINTEXT_HOST://localhost:29091
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_NUM_PARTITIONS: 8
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    network_mode: "host"
+    restart: unless-stopped
+
+  kafka2:
+    image: confluentinc/cp-kafka:5.0.1
+    depends_on:
+      - zookeeper
+    env_file:
+      - dev/docker-kafka.env
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_BROKER_ID: 2
+    network_mode: "host"
+    restart: unless-stopped
+
+  kafka3:
+    image: confluentinc/cp-kafka:5.0.1
+    depends_on:
+      - zookeeper
+    env_file:
+      - dev/docker-kafka.env
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9093,PLAINTEXT_HOST://localhost:29093
+      KAFKA_BROKER_ID: 3
+    network_mode: "host"
+    restart: unless-stopped
+
+  kafka4:
+    image: confluentinc/cp-kafka:5.0.1
+    depends_on:
+      - zookeeper
+    env_file:
+      - dev/docker-kafka.env
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9094,PLAINTEXT_HOST://localhost:29094
+      KAFKA_BROKER_ID: 4
+    network_mode: "host"
+    restart: unless-stopped
+
+  kafka5:
+      image: confluentinc/cp-kafka:5.0.1
+      depends_on:
+        - zookeeper
+      env_file:
+        - dev/docker-kafka.env
+      environment:
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9095,PLAINTEXT_HOST://localhost:29095
+        KAFKA_BROKER_ID: 5
+      network_mode: "host"
+      restart: unless-stopped
