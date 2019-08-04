@@ -16,19 +16,11 @@ services:
     image: confluentinc/cp-kafka:5.0.1
     depends_on:
       - zookeeper
+    env_file:
+      - dev/docker-kafka.env
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: "localhost:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9091,PLAINTEXT_HOST://localhost:29091
-      KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=INFO"
       KAFKA_BROKER_ID: 1
-      KAFKA_BROKER_RACK: "r1"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
-      KAFKA_JMX_PORT: 9991
     network_mode: "host"
     restart: unless-stopped
 
@@ -36,18 +28,11 @@ services:
     image: confluentinc/cp-kafka:5.0.1
     depends_on:
       - zookeeper
+    env_file:
+      - dev/docker-kafka.env
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: "localhost:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=INFO"
       KAFKA_BROKER_ID: 2
-      KAFKA_BROKER_RACK: "r1"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_JMX_PORT: 9992
     network_mode: "host"
     restart: unless-stopped
 
@@ -55,18 +40,11 @@ services:
     image: confluentinc/cp-kafka:5.0.1
     depends_on:
       - zookeeper
+    env_file:
+      - dev/docker-kafka.env
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: "localhost:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9093,PLAINTEXT_HOST://localhost:29093
-      KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=INFO"
       KAFKA_BROKER_ID: 3
-      KAFKA_BROKER_RACK: "r1"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_JMX_PORT: 9993
     network_mode: "host"
     restart: unless-stopped
 
@@ -74,18 +52,11 @@ services:
     image: confluentinc/cp-kafka:5.0.1
     depends_on:
       - zookeeper
+    env_file:
+      - dev/docker-kafka.env
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: "localhost:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9094,PLAINTEXT_HOST://localhost:29094
-      KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=INFO"
       KAFKA_BROKER_ID: 4
-      KAFKA_BROKER_RACK: "r1"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_JMX_PORT: 9994
     network_mode: "host"
     restart: unless-stopped
 
@@ -93,17 +64,10 @@ services:
       image: confluentinc/cp-kafka:5.0.1
       depends_on:
         - zookeeper
+      env_file:
+        - dev/docker-kafka.env
       environment:
-        KAFKA_ZOOKEEPER_CONNECT: "localhost:2181"
-        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-        KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
         KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9095,PLAINTEXT_HOST://localhost:29095
-        KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=INFO"
         KAFKA_BROKER_ID: 5
-        KAFKA_BROKER_RACK: "r1"
-        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-        KAFKA_DELETE_TOPIC_ENABLE: "true"
-        KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-        KAFKA_JMX_PORT: 9995
       network_mode: "host"
       restart: unless-stopped
