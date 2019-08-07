@@ -5,13 +5,13 @@ package kafka_test
 import (
 	"testing"
 
-	"github.com/ThreeDotsLabs/watermill/message/infrastructure"
+	"github.com/ThreeDotsLabs/watermill/pubsub/tests"
 )
 
 func TestPublishSubscribe_stress(t *testing.T) {
-	infrastructure.TestPubSubStressTest(
+	tests.TestPubSubStressTest(
 		t,
-		infrastructure.Features{
+		tests.Features{
 			ConsumerGroups:      true,
 			ExactlyOnceDelivery: false,
 			GuaranteedOrder:     false,
@@ -23,9 +23,9 @@ func TestPublishSubscribe_stress(t *testing.T) {
 }
 
 func TestPublishSubscribe_ordered_stress(t *testing.T) {
-	infrastructure.TestPubSubStressTest(
+	tests.TestPubSubStressTest(
 		t,
-		infrastructure.Features{
+		tests.Features{
 			ConsumerGroups:      true,
 			ExactlyOnceDelivery: false,
 			GuaranteedOrder:     true,
