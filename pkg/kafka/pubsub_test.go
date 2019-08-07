@@ -11,7 +11,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/ThreeDotsLabs/watermill/message/infrastructure"
+	"github.com/ThreeDotsLabs/watermill/pubsub/tests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,14 +77,14 @@ func createNoGroupPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
 }
 
 func TestPublishSubscribe(t *testing.T) {
-	features := infrastructure.Features{
+	features := tests.Features{
 		ConsumerGroups:      true,
 		ExactlyOnceDelivery: false,
 		GuaranteedOrder:     false,
 		Persistent:          true,
 	}
 
-	infrastructure.TestPubSub(
+	tests.TestPubSub(
 		t,
 		features,
 		createPubSub,
@@ -97,9 +97,9 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
-	infrastructure.TestPubSub(
+	tests.TestPubSub(
 		t,
-		infrastructure.Features{
+		tests.Features{
 			ConsumerGroups:      true,
 			ExactlyOnceDelivery: false,
 			GuaranteedOrder:     true,
@@ -115,9 +115,9 @@ func TestNoGroupSubscriber(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
-	infrastructure.TestPubSub(
+	tests.TestPubSub(
 		t,
-		infrastructure.Features{
+		tests.Features{
 			ConsumerGroups:                   false,
 			ExactlyOnceDelivery:              false,
 			GuaranteedOrder:                  true,
