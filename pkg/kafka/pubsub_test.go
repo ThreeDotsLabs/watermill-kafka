@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/tests"
-	"github.com/stretchr/testify/require"
 )
 
 func kafkaBrokers() []string {
@@ -26,7 +26,10 @@ func kafkaBrokers() []string {
 func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (message.Publisher, message.Subscriber) {
 	logger := watermill.NewStdLogger(true, true)
 
-	publisher, err := kafka.NewPublisher(kafkaBrokers(), marshaler, nil, logger)
+	publisher, err := kafka.NewPublisher(kafka.PublisherConfig{
+		Brokers:   kafkaBrokers(),
+		Marshaler: marshaler,
+	}, logger)
 	require.NoError(t, err)
 
 	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
@@ -40,15 +43,15 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 
 	subscriber, err := kafka.NewSubscriber(
 		kafka.SubscriberConfig{
-			Brokers:       kafkaBrokers(),
-			ConsumerGroup: consumerGroup,
+			Brokers:               kafkaBrokers(),
+			Unmarshaler:           marshaler,
+			OverwriteSaramaConfig: saramaConfig,
+			ConsumerGroup:         consumerGroup,
 			InitializeTopicDetails: &sarama.TopicDetail{
 				NumPartitions:     8,
 				ReplicationFactor: 1,
 			},
 		},
-		saramaConfig,
-		marshaler,
 		logger,
 	)
 	require.NoError(t, err)
