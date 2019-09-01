@@ -100,6 +100,27 @@ func (c SubscriberConfig) Validate() error {
 	return nil
 }
 
+// DefaultSaramaSubscriberConfig creates default Sarama config used by Watermill.
+//
+// Custom config can be passed to NewSubscriber and NewPublisher.
+//
+//		saramaConfig := DefaultSaramaSubscriberConfig()
+//		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+//
+//		subscriberConfig.OverwriteSaramaConfig = saramaConfig
+//
+//		subscriber, err := NewSubscriber(subscriberConfig, logger)
+//		// ...
+//
+func DefaultSaramaSubscriberConfig() *sarama.Config {
+	config := sarama.NewConfig()
+	config.Version = sarama.V1_0_0_0
+	config.Consumer.Return.Errors = true
+	config.ClientID = "watermill"
+
+	return config
+}
+
 // Subscribe subscribers for messages in Kafka.
 //
 // There are multiple subscribers spawned
