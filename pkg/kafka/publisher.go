@@ -11,35 +11,66 @@ import (
 )
 
 type Publisher struct {
-	producer  sarama.SyncProducer
-	marshaler Marshaler
-
-	logger watermill.LoggerAdapter
+	config   PublisherConfig
+	producer sarama.SyncProducer
+	logger   watermill.LoggerAdapter
 
 	closed bool
 }
 
 // NewPublisher creates a new Kafka Publisher.
 func NewPublisher(
-	brokers []string,
-	marshaler Marshaler,
-	overwriteSaramaConfig *sarama.Config,
+	config PublisherConfig,
 	logger watermill.LoggerAdapter,
 ) (message.Publisher, error) {
-	if overwriteSaramaConfig == nil {
-		overwriteSaramaConfig = DefaultSaramaSyncPublisherConfig()
+	config.setDefaults()
+
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
 	if logger == nil {
 		logger = watermill.NopLogger{}
 	}
 
-	producer, err := sarama.NewSyncProducer(brokers, overwriteSaramaConfig)
+	producer, err := sarama.NewSyncProducer(config.Brokers, config.OverwriteSaramaConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create Kafka producer")
 	}
 
-	return &Publisher{producer, marshaler, logger, false}, nil
+	return &Publisher{
+		config:   config,
+		producer: producer,
+		logger:   logger,
+	}, nil
+}
+
+type PublisherConfig struct {
+	// Kafka brokers list.
+	Brokers []string
+
+	// Marshaler is used to marshal messages from Watermill format into Kafka format.
+	Marshaler Marshaler
+
+	// OverwriteSaramaConfig holds additional sarama settings.
+	OverwriteSaramaConfig *sarama.Config
+}
+
+func (c *PublisherConfig) setDefaults() {
+	if c.OverwriteSaramaConfig == nil {
+		c.OverwriteSaramaConfig = DefaultSaramaSyncPublisherConfig()
+	}
+}
+
+func (c PublisherConfig) Validate() error {
+	if len(c.Brokers) == 0 {
+		return errors.New("missing brokers")
+	}
+	if c.Marshaler == nil {
+		return errors.New("missing marshaler")
+	}
+
+	return nil
 }
 
 func DefaultSaramaSyncPublisherConfig() *sarama.Config {
@@ -70,7 +101,7 @@ func (p *Publisher) Publish(topic string, msgs ...*message.Message) error {
 		logFields["message_uuid"] = msg.UUID
 		p.logger.Trace("Sending message to Kafka", logFields)
 
-		kafkaMsg, err := p.marshaler.Marshal(topic, msg)
+		kafkaMsg, err := p.config.Marshaler.Marshal(topic, msg)
 		if err != nil {
 			return errors.Wrapf(err, "cannot marshal message %s", msg.UUID)
 		}

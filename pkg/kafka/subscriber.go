@@ -15,11 +15,8 @@ import (
 )
 
 type Subscriber struct {
-	config       SubscriberConfig
-	saramaConfig *sarama.Config
-
-	unmarshaler Unmarshaler
-	logger      watermill.LoggerAdapter
+	config SubscriberConfig
+	logger watermill.LoggerAdapter
 
 	closing       chan struct{}
 	subscribersWg sync.WaitGroup
@@ -30,18 +27,12 @@ type Subscriber struct {
 // NewSubscriber creates a new Kafka Subscriber.
 func NewSubscriber(
 	config SubscriberConfig,
-	overwriteSaramaConfig *sarama.Config,
-	unmarshaler Unmarshaler,
 	logger watermill.LoggerAdapter,
 ) (message.Subscriber, error) {
 	config.setDefaults()
 
 	if err := config.Validate(); err != nil {
 		return nil, err
-	}
-
-	if overwriteSaramaConfig == nil {
-		overwriteSaramaConfig = DefaultSaramaSubscriberConfig()
 	}
 
 	if logger == nil {
@@ -53,11 +44,8 @@ func NewSubscriber(
 	})
 
 	return &Subscriber{
-		config:       config,
-		saramaConfig: overwriteSaramaConfig,
-
-		unmarshaler: unmarshaler,
-		logger:      logger,
+		config: config,
+		logger: logger,
 
 		closing: make(chan struct{}),
 	}, nil
@@ -66,6 +54,12 @@ func NewSubscriber(
 type SubscriberConfig struct {
 	// Kafka brokers list.
 	Brokers []string
+
+	// Unmarshaler is used to unmarshal messages from Kafka format into Watermill format.
+	Unmarshaler Unmarshaler
+
+	// OverwriteSaramaConfig holds additional sarama settings.
+	OverwriteSaramaConfig *sarama.Config
 
 	// Kafka consumer group.
 	// When empty, all messages from all partitions will be returned.
@@ -84,6 +78,9 @@ type SubscriberConfig struct {
 const NoSleep time.Duration = -1
 
 func (c *SubscriberConfig) setDefaults() {
+	if c.OverwriteSaramaConfig == nil {
+		c.OverwriteSaramaConfig = DefaultSaramaSubscriberConfig()
+	}
 	if c.NackResendSleep == 0 {
 		c.NackResendSleep = time.Millisecond * 100
 	}
@@ -96,8 +93,32 @@ func (c SubscriberConfig) Validate() error {
 	if len(c.Brokers) == 0 {
 		return errors.New("missing brokers")
 	}
+	if c.Unmarshaler == nil {
+		return errors.New("missing unmarshaler")
+	}
 
 	return nil
+}
+
+// DefaultSaramaSubscriberConfig creates default Sarama config used by Watermill.
+//
+// Custom config can be passed to NewSubscriber and NewPublisher.
+//
+//		saramaConfig := DefaultSaramaSubscriberConfig()
+//		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+//
+//		subscriberConfig.OverwriteSaramaConfig = saramaConfig
+//
+//		subscriber, err := NewSubscriber(subscriberConfig, logger)
+//		// ...
+//
+func DefaultSaramaSubscriberConfig() *sarama.Config {
+	config := sarama.NewConfig()
+	config.Version = sarama.V1_0_0_0
+	config.Consumer.Return.Errors = true
+	config.ClientID = "watermill"
+
+	return config
 }
 
 // Subscribe subscribers for messages in Kafka.
@@ -190,7 +211,7 @@ func (s *Subscriber) consumeMessages(
 	s.logger.Info("Starting consuming", logFields)
 
 	// Start with a client
-	client, err := sarama.NewClient(s.config.Brokers, s.saramaConfig)
+	client, err := sarama.NewClient(s.config.Brokers, s.config.OverwriteSaramaConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create new Sarama client")
 	}
@@ -308,7 +329,7 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 	for _, partition := range partitions {
 		partitionLogFields := logFields.Add(watermill.LogFields{"kafka_partition": partition})
 
-		partitionConsumer, err := consumer.ConsumePartition(topic, partition, s.saramaConfig.Consumer.Offsets.Initial)
+		partitionConsumer, err := consumer.ConsumePartition(topic, partition, s.config.OverwriteSaramaConfig.Consumer.Offsets.Initial)
 		if err != nil {
 			if err := client.Close(); err != nil && err != sarama.ErrClosedClient {
 				s.logger.Error("Cannot close client", err, partitionLogFields)
@@ -373,7 +394,7 @@ func (s *Subscriber) consumePartition(
 func (s *Subscriber) createMessagesHandler(output chan *message.Message) messageHandler {
 	return messageHandler{
 		outputChannel:   output,
-		unmarshaler:     s.unmarshaler,
+		unmarshaler:     s.config.Unmarshaler,
 		nackResendSleep: s.config.NackResendSleep,
 		logger:          s.logger,
 		closing:         s.closing,
@@ -520,7 +541,7 @@ func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
 		return errors.New("s.config.InitializeTopicDetails is empty, cannot SubscribeInitialize")
 	}
 
-	clusterAdmin, err := sarama.NewClusterAdmin(s.config.Brokers, s.saramaConfig)
+	clusterAdmin, err := sarama.NewClusterAdmin(s.config.Brokers, s.config.OverwriteSaramaConfig)
 	if err != nil {
 		return errors.Wrap(err, "cannot create cluster admin")
 	}
