@@ -1,4 +1,4 @@
-module github.com/ThreeDotsLabs/watermill-kafka
+module github.com/ThreeDotsLabs/watermill-kafka/v2
 
 require (
 	github.com/DataDog/zstd v1.4.1 // indirect
