@@ -23,3 +23,10 @@ fmt:
 	go fmt ./...
 	goimports -l -w .
 
+update_watermill:
+	go get -u github.com/ThreeDotsLabs/watermill
+	go mod tidy
+
+	sed -i '\|go 1\.|d' go.mod
+	go mod edit -fmt
+
