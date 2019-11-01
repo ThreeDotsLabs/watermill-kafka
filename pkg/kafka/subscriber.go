@@ -265,15 +265,10 @@ func (s *Subscriber) consumeGroupMessages(
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create consumer group client")
 	}
-	go func() {
-		for err := range group.Errors() {
-			if err == nil {
-				continue
-			}
 
-			s.logger.Error("Sarama internal error", err, logFields)
-		}
-	}()
+	closed := make(chan struct{})
+
+	go s.handleGroupErrors(group, logFields, closed)
 
 	handler := consumerGroupHandler{
 		ctx:              ctx,
@@ -283,7 +278,6 @@ func (s *Subscriber) consumeGroupMessages(
 		messageLogFields: logFields,
 	}
 
-	closed := make(chan struct{})
 	go func() {
 		err := group.Consume(ctx, []string{topic}, handler)
 
@@ -307,6 +301,25 @@ func (s *Subscriber) consumeGroupMessages(
 	}()
 
 	return closed, nil
+}
+
+func (s *Subscriber) handleGroupErrors(group sarama.ConsumerGroup, logFields watermill.LogFields, closed chan struct{}) {
+	errs := group.Errors()
+
+	for {
+		select {
+		case err := <-errs:
+			if err == nil {
+				continue
+			}
+
+			s.logger.Error("Sarama internal error", err, logFields)
+		case <-closed:
+			return
+		case <-s.closing:
+			return
+		}
+	}
 }
 
 func (s *Subscriber) consumeWithoutConsumerGroups(
