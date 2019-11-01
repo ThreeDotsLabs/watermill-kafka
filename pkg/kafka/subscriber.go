@@ -245,6 +245,8 @@ func (s *Subscriber) consumeMessages(
 		<-consumeMessagesClosed
 		if err := client.Close(); err != nil {
 			s.logger.Error("Cannot close client", err, logFields)
+		} else {
+			s.logger.Debug("Client closed", logFields)
 		}
 	}()
 
