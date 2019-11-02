@@ -53,7 +53,7 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 	saramaConfig.Producer.RequiredAcks = sarama.WaitForAll
 	saramaConfig.ChannelBufferSize = 10240
 	saramaConfig.Consumer.Group.Heartbeat.Interval = time.Millisecond * 500
-	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Millisecond * 500
+	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Second * 3
 
 	var subscriber message.Subscriber
 

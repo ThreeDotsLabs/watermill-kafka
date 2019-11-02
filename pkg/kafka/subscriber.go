@@ -266,9 +266,10 @@ func (s *Subscriber) consumeGroupMessages(
 		return nil, errors.Wrap(err, "cannot create consumer group client")
 	}
 
-	closed := make(chan struct{})
+	groupClosed := make(chan struct{})
 
-	go s.handleGroupErrors(group, logFields, closed)
+	handleGroupErrorsCtx, cancelHandleGroupErrors := context.WithCancel(context.Background())
+	handleGroupErrorsDone := s.handleGroupErrors(handleGroupErrorsCtx, group, logFields)
 
 	handler := consumerGroupHandler{
 		ctx:              ctx,
@@ -292,34 +293,46 @@ func (s *Subscriber) consumeGroupMessages(
 			s.logger.Debug("Consume stopped without any error", logFields)
 		}
 
+		cancelHandleGroupErrors()
+		<-handleGroupErrorsDone
+
 		if err := group.Close(); err != nil {
 			s.logger.Info("Group close with error", logFields.Add(watermill.LogFields{"err": err.Error()}))
 		}
 
 		s.logger.Info("Consuming done", logFields)
-		close(closed)
+		close(groupClosed)
 	}()
 
-	return closed, nil
+	return groupClosed, nil
 }
 
-func (s *Subscriber) handleGroupErrors(group sarama.ConsumerGroup, logFields watermill.LogFields, closed chan struct{}) {
-	errs := group.Errors()
+func (s *Subscriber) handleGroupErrors(
+	ctx context.Context,
+	group sarama.ConsumerGroup,
+	logFields watermill.LogFields,
+) chan struct{} {
+	done := make(chan struct{})
 
-	for {
-		select {
-		case err := <-errs:
-			if err == nil {
-				continue
+	go func() {
+		defer close(done)
+		errs := group.Errors()
+
+		for {
+			select {
+			case err := <-errs:
+				if err == nil {
+					continue
+				}
+
+				s.logger.Error("Sarama internal error", err, logFields)
+			case <-ctx.Done():
+				return
 			}
-
-			s.logger.Error("Sarama internal error", err, logFields)
-		case <-closed:
-			return
-		case <-s.closing:
-			return
 		}
-	}
+	}()
+
+	return done
 }
 
 func (s *Subscriber) consumeWithoutConsumerGroups(
