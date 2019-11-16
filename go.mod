@@ -3,7 +3,7 @@ module github.com/ThreeDotsLabs/watermill-kafka/v2
 require (
 	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/Shopify/sarama v1.23.1
-	github.com/ThreeDotsLabs/watermill v1.0.0
+	github.com/ThreeDotsLabs/watermill v1.0.2
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/frankban/quicktest v1.4.0 // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
