@@ -8,7 +8,6 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
-	"github.com/renstrom/shortuuid"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -40,7 +39,7 @@ func NewSubscriber(
 	}
 
 	logger = logger.With(watermill.LogFields{
-		"subscriber_uuid": shortuuid.New(),
+		"subscriber_uuid": watermill.NewShortUUID(),
 	})
 
 	return &Subscriber{
@@ -135,7 +134,7 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string) (<-chan *messa
 		"provider":            "kafka",
 		"topic":               topic,
 		"consumer_group":      s.config.ConsumerGroup,
-		"kafka_consumer_uuid": shortuuid.New(),
+		"kafka_consumer_uuid": watermill.NewShortUUID(),
 	}
 	s.logger.Info("Subscribing to Kafka topic", logFields)
 
