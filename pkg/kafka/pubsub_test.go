@@ -1,6 +1,7 @@
 package kafka_test
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -26,10 +27,23 @@ func kafkaBrokers() []string {
 func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (message.Publisher, message.Subscriber) {
 	logger := watermill.NewStdLogger(true, true)
 
-	publisher, err := kafka.NewPublisher(kafka.PublisherConfig{
-		Brokers:   kafkaBrokers(),
-		Marshaler: marshaler,
-	}, logger)
+	var err error
+	var publisher message.Publisher
+
+	retriesLeft := 5
+	for {
+		publisher, err = kafka.NewPublisher(kafka.PublisherConfig{
+			Brokers:   kafkaBrokers(),
+			Marshaler: marshaler,
+		}, logger)
+		if err == nil || retriesLeft == 0 {
+			break
+		}
+
+		retriesLeft--
+		fmt.Printf("cannot create kafka Publisher: %s, retrying (%d retries left)", err, retriesLeft)
+		time.Sleep(time.Second * 2)
+	}
 	require.NoError(t, err)
 
 	saramaConfig := kafka.DefaultSaramaSubscriberConfig()
@@ -39,21 +53,34 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 	saramaConfig.Producer.RequiredAcks = sarama.WaitForAll
 	saramaConfig.ChannelBufferSize = 10240
 	saramaConfig.Consumer.Group.Heartbeat.Interval = time.Millisecond * 500
-	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Millisecond * 500
+	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Second * 3
 
-	subscriber, err := kafka.NewSubscriber(
-		kafka.SubscriberConfig{
-			Brokers:               kafkaBrokers(),
-			Unmarshaler:           marshaler,
-			OverwriteSaramaConfig: saramaConfig,
-			ConsumerGroup:         consumerGroup,
-			InitializeTopicDetails: &sarama.TopicDetail{
-				NumPartitions:     8,
-				ReplicationFactor: 1,
+	var subscriber message.Subscriber
+
+	retriesLeft = 5
+	for {
+		subscriber, err = kafka.NewSubscriber(
+			kafka.SubscriberConfig{
+				Brokers:               kafkaBrokers(),
+				Unmarshaler:           marshaler,
+				OverwriteSaramaConfig: saramaConfig,
+				ConsumerGroup:         consumerGroup,
+				InitializeTopicDetails: &sarama.TopicDetail{
+					NumPartitions:     8,
+					ReplicationFactor: 1,
+				},
 			},
-		},
-		logger,
-	)
+			logger,
+		)
+		if err == nil || retriesLeft == 0 {
+			break
+		}
+
+		retriesLeft--
+		fmt.Printf("cannot create kafka Subscriber: %s, retrying (%d retries left)", err, retriesLeft)
+		time.Sleep(time.Second * 2)
+	}
+
 	require.NoError(t, err)
 
 	return publisher, subscriber
@@ -123,7 +150,7 @@ func TestNoGroupSubscriber(t *testing.T) {
 		tests.Features{
 			ConsumerGroups:                   false,
 			ExactlyOnceDelivery:              false,
-			GuaranteedOrder:                  true,
+			GuaranteedOrder:                  false,
 			Persistent:                       true,
 			NewSubscriberReceivesOldMessages: true,
 		},

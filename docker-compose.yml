@@ -4,7 +4,7 @@
 version: '3'
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:5.0.1
+    image: confluentinc/cp-zookeeper:5.3.1
     restart: unless-stopped
     environment:
       ZOOKEEPER_SERVER_ID: 1
@@ -13,7 +13,7 @@ services:
     network_mode: "host"
 
   kafka1:
-    image: confluentinc/cp-kafka:5.0.1
+    image: confluentinc/cp-kafka:5.3.1
     depends_on:
       - zookeeper
     env_file:
@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
 
   kafka2:
-    image: confluentinc/cp-kafka:5.0.1
+    image: confluentinc/cp-kafka:5.3.1
     depends_on:
       - zookeeper
     env_file:
@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   kafka3:
-    image: confluentinc/cp-kafka:5.0.1
+    image: confluentinc/cp-kafka:5.3.1
     depends_on:
       - zookeeper
     env_file:
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
   kafka4:
-    image: confluentinc/cp-kafka:5.0.1
+    image: confluentinc/cp-kafka:5.3.1
     depends_on:
       - zookeeper
     env_file:
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   kafka5:
-      image: confluentinc/cp-kafka:5.0.1
+      image: confluentinc/cp-kafka:5.3.1
       depends_on:
         - zookeeper
       env_file:

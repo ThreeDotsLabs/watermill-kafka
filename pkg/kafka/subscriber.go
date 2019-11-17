@@ -244,6 +244,8 @@ func (s *Subscriber) consumeMessages(
 		<-consumeMessagesClosed
 		if err := client.Close(); err != nil {
 			s.logger.Error("Cannot close client", err, logFields)
+		} else {
+			s.logger.Debug("Client closed", logFields)
 		}
 	}()
 
@@ -262,15 +264,11 @@ func (s *Subscriber) consumeGroupMessages(
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create consumer group client")
 	}
-	go func() {
-		for err := range group.Errors() {
-			if err == nil {
-				continue
-			}
 
-			s.logger.Error("Sarama internal error", err, logFields)
-		}
-	}()
+	groupClosed := make(chan struct{})
+
+	handleGroupErrorsCtx, cancelHandleGroupErrors := context.WithCancel(context.Background())
+	handleGroupErrorsDone := s.handleGroupErrors(handleGroupErrorsCtx, group, logFields)
 
 	handler := consumerGroupHandler{
 		ctx:              ctx,
@@ -280,7 +278,6 @@ func (s *Subscriber) consumeGroupMessages(
 		messageLogFields: logFields,
 	}
 
-	closed := make(chan struct{})
 	go func() {
 		err := group.Consume(ctx, []string{topic}, handler)
 
@@ -295,15 +292,46 @@ func (s *Subscriber) consumeGroupMessages(
 			s.logger.Debug("Consume stopped without any error", logFields)
 		}
 
+		cancelHandleGroupErrors()
+		<-handleGroupErrorsDone
+
 		if err := group.Close(); err != nil {
 			s.logger.Info("Group close with error", logFields.Add(watermill.LogFields{"err": err.Error()}))
 		}
 
 		s.logger.Info("Consuming done", logFields)
-		close(closed)
+		close(groupClosed)
 	}()
 
-	return closed, nil
+	return groupClosed, nil
+}
+
+func (s *Subscriber) handleGroupErrors(
+	ctx context.Context,
+	group sarama.ConsumerGroup,
+	logFields watermill.LogFields,
+) chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		errs := group.Errors()
+
+		for {
+			select {
+			case err := <-errs:
+				if err == nil {
+					continue
+				}
+
+				s.logger.Error("Sarama internal error", err, logFields)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return done
 }
 
 func (s *Subscriber) consumeWithoutConsumerGroups(
