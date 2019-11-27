@@ -22,7 +22,7 @@ type Publisher struct {
 func NewPublisher(
 	config PublisherConfig,
 	logger watermill.LoggerAdapter,
-) (message.Publisher, error) {
+) (*Publisher, error) {
 	config.setDefaults()
 
 	if err := config.Validate(); err != nil {

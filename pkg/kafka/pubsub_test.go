@@ -1,6 +1,7 @@
 package kafka_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -8,11 +9,13 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/subscriber"
 	"github.com/ThreeDotsLabs/watermill/pubsub/tests"
 )
 
@@ -24,11 +27,11 @@ func kafkaBrokers() []string {
 	return []string{"localhost:9091", "localhost:9092", "localhost:9093", "localhost:9094", "localhost:9095"}
 }
 
-func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (message.Publisher, message.Subscriber) {
+func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (*kafka.Publisher, *kafka.Subscriber) {
 	logger := watermill.NewStdLogger(true, true)
 
 	var err error
-	var publisher message.Publisher
+	var publisher *kafka.Publisher
 
 	retriesLeft := 5
 	for {
@@ -55,7 +58,7 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 	saramaConfig.Consumer.Group.Heartbeat.Interval = time.Millisecond * 500
 	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Second * 3
 
-	var subscriber message.Subscriber
+	var subscriber *kafka.Subscriber
 
 	retriesLeft = 5
 	for {
@@ -157,4 +160,45 @@ func TestNoGroupSubscriber(t *testing.T) {
 		createNoGroupPubSub,
 		nil,
 	)
+}
+
+func TestPartitionOffsets(t *testing.T) {
+	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "")
+	topicName := "topic_" + watermill.NewUUID()
+
+	var messagesToPublish []*message.Message
+
+	for i := 0; i < 20; i++ {
+		id := watermill.NewUUID()
+		messagesToPublish = append(messagesToPublish, message.NewMessage(id, nil))
+	}
+	err := pub.Publish(topicName, messagesToPublish...)
+	require.NoError(t, err, "cannot publish message")
+
+	messages, err := sub.Subscribe(context.Background(), topicName)
+	require.NoError(t, err)
+
+	receivedMessages, all := subscriber.BulkReadWithDeduplication(messages, len(messagesToPublish), time.Second*10)
+	assert.True(t, all)
+
+	expectedPartitionsOffsets := map[int32]int64{}
+	for _, msg := range receivedMessages {
+		partition := kafka.MessagePartitionFromCtx(msg.Context())
+		messagePartitionOffset := kafka.MessagePartitionOffsetFromCtx(msg.Context())
+
+		if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
+			// kafka partition offset is offset of the last message + 1
+			expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
+		}
+
+		assert.Equal(t, topicName, kafka.MessageTopicFromCtx(msg.Context()))
+	}
+
+	offsets, err := sub.PartitionOffset(topicName)
+	require.NoError(t, err)
+	assert.NotEmpty(t, offsets)
+
+	assert.EqualValues(t, expectedPartitionsOffsets, offsets)
+
+	require.NoError(t, pub.Close())
 }
