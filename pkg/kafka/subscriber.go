@@ -507,7 +507,6 @@ func (h messageHandler) processMessage(
 
 	h.logger.Trace("Received message from Kafka", receivedMsgLogFields)
 
-	ctx = setTopicToCtx(ctx, kafkaMsg.Topic)
 	ctx = setPartitionToCtx(ctx, kafkaMsg.Partition)
 	ctx = setPartitionOffsetToCtx(ctx, kafkaMsg.Offset)
 

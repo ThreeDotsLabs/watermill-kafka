@@ -179,20 +179,21 @@ func TestPartitionOffsets(t *testing.T) {
 	require.NoError(t, err)
 
 	receivedMessages, all := subscriber.BulkReadWithDeduplication(messages, len(messagesToPublish), time.Second*10)
-	assert.True(t, all)
+	require.True(t, all)
 
 	expectedPartitionsOffsets := map[int32]int64{}
 	for _, msg := range receivedMessages {
-		partition := kafka.MessagePartitionFromCtx(msg.Context())
-		messagePartitionOffset := kafka.MessagePartitionOffsetFromCtx(msg.Context())
+		partition, ok := kafka.MessagePartitionFromCtx(msg.Context())
+		assert.True(t, ok)
+		messagePartitionOffset, ok := kafka.MessagePartitionOffsetFromCtx(msg.Context())
+		assert.True(t, ok)
 
 		if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
 			// kafka partition offset is offset of the last message + 1
 			expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
 		}
-
-		assert.Equal(t, topicName, kafka.MessageTopicFromCtx(msg.Context()))
 	}
+	assert.NotEmpty(t, expectedPartitionsOffsets)
 
 	offsets, err := sub.PartitionOffset(topicName)
 	require.NoError(t, err)
