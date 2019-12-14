@@ -162,7 +162,7 @@ func TestNoGroupSubscriber(t *testing.T) {
 	)
 }
 
-func TestPartitionOffsets(t *testing.T) {
+func TestCtxValues(t *testing.T) {
 	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "")
 	topicName := "topic_" + watermill.NewUUID()
 
@@ -185,8 +185,13 @@ func TestPartitionOffsets(t *testing.T) {
 	for _, msg := range receivedMessages {
 		partition, ok := kafka.MessagePartitionFromCtx(msg.Context())
 		assert.True(t, ok)
+
 		messagePartitionOffset, ok := kafka.MessagePartitionOffsetFromCtx(msg.Context())
 		assert.True(t, ok)
+
+		kafkaMsgTimestamp, ok := kafka.MessageTimestampFromCtx(msg.Context())
+		assert.True(t, ok)
+		assert.NotZero(t, kafkaMsgTimestamp)
 
 		if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
 			// kafka partition offset is offset of the last message + 1
