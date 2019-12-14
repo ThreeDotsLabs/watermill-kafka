@@ -509,6 +509,7 @@ func (h messageHandler) processMessage(
 
 	ctx = setPartitionToCtx(ctx, kafkaMsg.Partition)
 	ctx = setPartitionOffsetToCtx(ctx, kafkaMsg.Offset)
+	ctx = setMessageTimestampToCtx(ctx, kafkaMsg.Timestamp)
 
 	msg, err := h.unmarshaler.Unmarshal(kafkaMsg)
 	if err != nil {
