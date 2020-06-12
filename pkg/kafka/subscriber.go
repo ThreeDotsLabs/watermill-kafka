@@ -20,7 +20,8 @@ type Subscriber struct {
 	closing       chan struct{}
 	subscribersWg sync.WaitGroup
 
-	closed bool
+	closed  bool
+	brokers int
 }
 
 // NewSubscriber creates a new Kafka Subscriber.
@@ -70,6 +71,9 @@ type SubscriberConfig struct {
 	// How long about unsuccessful reconnecting next reconnect will occur.
 	ReconnectRetrySleep time.Duration
 
+	// How long to check the connection to the cluster.
+	HealthCheckTimer time.Duration
+
 	InitializeTopicDetails *sarama.TopicDetail
 }
 
@@ -85,6 +89,9 @@ func (c *SubscriberConfig) setDefaults() {
 	}
 	if c.ReconnectRetrySleep == 0 {
 		c.ReconnectRetrySleep = time.Second
+	}
+	if c.HealthCheckTimer == 0 {
+		c.HealthCheckTimer = time.Second
 	}
 }
 
@@ -201,6 +208,31 @@ func (s *Subscriber) handleReconnects(
 	}
 }
 
+func (s *Subscriber) IsHealthy() bool {
+	return s.brokers > 0
+}
+
+func (s *Subscriber) updateClientHealth(
+	ctx context.Context,
+	client sarama.Client,
+	logFields watermill.LogFields,
+) {
+	ticker := time.NewTicker(s.config.HealthCheckTimer)
+	for {
+		select {
+		case <-s.closing:
+			s.brokers = 0
+			return
+		case <-ctx.Done():
+			s.brokers = 0
+			return
+		case <-ticker.C:
+			s.brokers = len(client.Brokers())
+			s.logger.Trace("Fetched the list of active brokers", logFields.Add(watermill.LogFields{"brokers": s.brokers}))
+		}
+	}
+}
+
 func (s *Subscriber) consumeMessages(
 	ctx context.Context,
 	topic string,
@@ -225,6 +257,7 @@ func (s *Subscriber) consumeMessages(
 			// avoid goroutine leak
 		}
 	}()
+	go s.updateClientHealth(ctx, client, logFields)
 
 	if s.config.ConsumerGroup == "" {
 		consumeMessagesClosed, err = s.consumeWithoutConsumerGroups(ctx, client, topic, output, logFields)
