@@ -279,28 +279,46 @@ func (s *Subscriber) consumeGroupMessages(
 	}
 
 	go func() {
-		err := group.Consume(ctx, []string{topic}, handler)
+		defer func() {
+			cancelHandleGroupErrors()
+			<-handleGroupErrorsDone
 
-		if err != nil {
-			if err == sarama.ErrUnknown {
-				// this is info, because it is often just noise
-				s.logger.Info("Received unknown Sarama error", logFields.Add(watermill.LogFields{"err": err.Error()}))
-			} else {
-				s.logger.Error("Group consume error", err, logFields)
+			if err := group.Close(); err != nil {
+				s.logger.Info("Group close with error", logFields.Add(watermill.LogFields{"err": err.Error()}))
 			}
-		} else {
-			s.logger.Debug("Consume stopped without any error", logFields)
+
+			s.logger.Info("Consuming done", logFields)
+			close(groupClosed)
+		}()
+
+	ConsumeLoop:
+		for {
+			select {
+			default:
+				s.logger.Debug("Not closing", logFields)
+			case <-s.closing:
+				s.logger.Debug("Subscriber is closing, stopping group.Consume loop", logFields)
+				break ConsumeLoop
+			case <-ctx.Done():
+				s.logger.Debug("Ctx was cancelled, stopping group.Consume loop", logFields)
+				break ConsumeLoop
+			}
+
+			if err := group.Consume(ctx, []string{topic}, handler); err != nil {
+				if err == sarama.ErrUnknown {
+					// this is info, because it is often just noise
+					s.logger.Info("Received unknown Sarama error", logFields.Add(watermill.LogFields{"err": err.Error()}))
+				} else {
+					s.logger.Error("Group consume error", err, logFields)
+				}
+
+				break ConsumeLoop
+			}
+
+			// this is expected behaviour to run Consume again after it exited
+			// see: https://github.com/ThreeDotsLabs/watermill/issues/210
+			s.logger.Debug("Consume stopped without any error, running consume again", logFields)
 		}
-
-		cancelHandleGroupErrors()
-		<-handleGroupErrorsDone
-
-		if err := group.Close(); err != nil {
-			s.logger.Info("Group close with error", logFields.Add(watermill.LogFields{"err": err.Error()}))
-		}
-
-		s.logger.Info("Consuming done", logFields)
-		close(groupClosed)
 	}()
 
 	return groupClosed, nil
