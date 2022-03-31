@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -38,6 +39,10 @@ func NewPublisher(
 		return nil, errors.Wrap(err, "cannot create Kafka producer")
 	}
 
+	if config.OTELEnabled {
+		producer = otelsarama.WrapSyncProducer(config.OverwriteSaramaConfig, producer)
+	}
+
 	return &Publisher{
 		config:   config,
 		producer: producer,
@@ -54,6 +59,9 @@ type PublisherConfig struct {
 
 	// OverwriteSaramaConfig holds additional sarama settings.
 	OverwriteSaramaConfig *sarama.Config
+
+	// If true then each sent message will be wrapped with Opentelemetry tracing, provided by otelsarama.
+	OTELEnabled bool
 }
 
 func (c *PublisherConfig) setDefaults() {
