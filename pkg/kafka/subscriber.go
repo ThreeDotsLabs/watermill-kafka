@@ -586,6 +586,8 @@ ResendLoop:
 
 			// reset acks, etc.
 			msg = msg.Copy()
+			msg.SetContext(ctx)
+
 			if h.nackResendSleep != NoSleep {
 				time.Sleep(h.nackResendSleep)
 			}
