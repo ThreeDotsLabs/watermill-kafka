@@ -23,6 +23,9 @@ fmt:
 	go fmt ./...
 	goimports -l -w .
 
+build:
+	go build ./...
+
 update_watermill:
 	go get -u github.com/ThreeDotsLabs/watermill
 	go mod tidy
