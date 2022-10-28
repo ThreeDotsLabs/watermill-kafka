@@ -1,22 +1,22 @@
 up:
-	docker-compose up
+	docker-compose up -d
 
-test: wait
+test:
 	go test -parallel 20 ./...
 
-test_v: wait
+test_v:
 	go test -parallel 20 -v ./...
 
-test_short: wait
+test_short:
 	go test -parallel 20 ./... -short
 
-test_race: wait
+test_race:
 	go test ./... -short -race
 
-test_stress: wait
+test_stress:
 	go test -v -tags=stress -parallel 15 -timeout=45m ./...
 
-test_reconnect: wait
+test_reconnect:
 	go test -tags=reconnect ./...
 
 fmt:
