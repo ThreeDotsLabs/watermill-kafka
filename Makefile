@@ -27,7 +27,7 @@ build:
 	go build ./...
 
 wait:
-	go run .github/workflows/wait-for.go localhost:9091 localhost:9092 localhost:9093 localhost:9094 localhost:9095
+	time go run github.com/ThreeDotsLabs/watermill/dev/wait-for@github-actions localhost:9091 localhost:9092 localhost:9093 localhost:9094 localhost:9095
 
 update_watermill:
 	go get -u github.com/ThreeDotsLabs/watermill
