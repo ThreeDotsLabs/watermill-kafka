@@ -1,5 +1,5 @@
 up:
-	docker-compose up
+	docker-compose up -d
 
 test:
 	go test -parallel 20 ./...
@@ -22,6 +22,12 @@ test_reconnect:
 fmt:
 	go fmt ./...
 	goimports -l -w .
+
+build:
+	go build ./...
+
+wait:
+	go run github.com/ThreeDotsLabs/wait-for@latest localhost:9091 localhost:9092 localhost:9093 localhost:9094 localhost:9095
 
 update_watermill:
 	go get -u github.com/ThreeDotsLabs/watermill
