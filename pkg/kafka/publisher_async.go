@@ -4,6 +4,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -53,9 +54,22 @@ func NewAsyncPublisher(
 }
 
 func (c *PublisherConfig) setAsyncDefaults() {
-	c.setDefaults()
-	c.OverwriteSaramaConfig.Producer.Return.Successes = true
-	c.OverwriteSaramaConfig.Producer.Return.Errors = true
+	if c.OverwriteSaramaConfig == nil {
+		c.OverwriteSaramaConfig = DefaultSaramaAsyncPublisherConfig()
+	}
+}
+
+func DefaultSaramaAsyncPublisherConfig() *sarama.Config {
+	config := sarama.NewConfig()
+
+	config.Producer.Retry.Max = 10
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
+	config.Version = sarama.V1_0_0_0
+	config.Metadata.Retry.Backoff = time.Second * 2
+	config.ClientID = "watermill"
+
+	return config
 }
 
 // Publish publishes message to Kafka.

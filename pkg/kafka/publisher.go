@@ -66,7 +66,7 @@ type PublisherConfig struct {
 
 func (c *PublisherConfig) setDefaults() {
 	if c.OverwriteSaramaConfig == nil {
-		c.OverwriteSaramaConfig = DefaultSaramaPublisherConfig()
+		c.OverwriteSaramaConfig = DefaultSaramaSyncPublisherConfig()
 	}
 }
 
@@ -81,7 +81,7 @@ func (c PublisherConfig) Validate() error {
 	return nil
 }
 
-func DefaultSaramaPublisherConfig() *sarama.Config {
+func DefaultSaramaSyncPublisherConfig() *sarama.Config {
 	config := sarama.NewConfig()
 
 	config.Producer.Retry.Max = 10
