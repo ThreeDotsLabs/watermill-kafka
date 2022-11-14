@@ -1,11 +1,9 @@
 package kafka
 
 import (
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
-	"time"
-
 	"github.com/Shopify/sarama"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -26,7 +24,7 @@ func NewAsyncPublisher(
 	config PublisherConfig,
 	logger watermill.LoggerAdapter,
 ) (*PublisherAsync, error) {
-	config.setDefaults()
+	config.setAsyncDefaults()
 
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -54,48 +52,10 @@ func NewAsyncPublisher(
 	}, nil
 }
 
-type PublisherAsyncConfig struct {
-	// Kafka brokers list.
-	Brokers []string
-
-	// Marshaler is used to marshal messages from Watermill format into Kafka format.
-	Marshaler Marshaler
-
-	// OverwriteSaramaConfig holds additional sarama settings.
-	OverwriteSaramaConfig *sarama.Config
-
-	// If true then each sent message will be wrapped with Opentelemetry tracing, provided by otelsarama.
-	OTELEnabled bool
-}
-
-func (c *PublisherAsyncConfig) setDefaults() {
-	if c.OverwriteSaramaConfig == nil {
-		c.OverwriteSaramaConfig = DefaultSaramaAsyncPublisherConfig()
-	}
-}
-
-func (c PublisherAsyncConfig) Validate() error {
-	if len(c.Brokers) == 0 {
-		return errors.New("missing brokers")
-	}
-	if c.Marshaler == nil {
-		return errors.New("missing marshaler")
-	}
-
-	return nil
-}
-
-func DefaultSaramaAsyncPublisherConfig() *sarama.Config {
-	config := sarama.NewConfig()
-
-	config.Producer.Retry.Max = 10
-	config.Producer.Return.Successes = true
-	config.Producer.Return.Errors = true
-	config.Version = sarama.V1_0_0_0
-	config.Metadata.Retry.Backoff = time.Second * 2
-	config.ClientID = "watermill"
-
-	return config
+func (c *PublisherConfig) setAsyncDefaults() {
+	c.setDefaults()
+	c.OverwriteSaramaConfig.Producer.Return.Successes = true
+	c.OverwriteSaramaConfig.Producer.Return.Errors = true
 }
 
 // Publish publishes message to Kafka.
