@@ -97,3 +97,11 @@ func (p *PublisherAsync) Close() error {
 
 	return nil
 }
+
+func (p *PublisherAsync) Errors() <-chan *sarama.ProducerError {
+	return p.errorsChan
+}
+
+func (p *PublisherAsync) Successes() <-chan *sarama.ProducerMessage {
+	return p.successesChan
+}
