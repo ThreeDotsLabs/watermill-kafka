@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"fmt"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 	"time"
 
@@ -13,9 +12,11 @@ import (
 )
 
 type PublisherAsync struct {
-	config   PublisherConfig
-	producer sarama.AsyncProducer
-	logger   watermill.LoggerAdapter
+	config        PublisherConfig
+	producer      sarama.AsyncProducer
+	logger        watermill.LoggerAdapter
+	errorsChan    <-chan *sarama.ProducerError
+	successesChan <-chan *sarama.ProducerMessage
 
 	closed bool
 }
@@ -44,26 +45,12 @@ func NewAsyncPublisher(
 		producer = otelsarama.WrapAsyncProducer(config.OverwriteSaramaConfig, producer)
 	}
 
-	// Handle errors and successes
-	go func() {
-		for msg := range producer.Successes() {
-			logFields := make(watermill.LogFields, 1)
-			logFields["topic"] = msg.Topic
-			logger.Debug(fmt.Sprintf("publish success: %s - %d - %d", msg.Topic, msg.Partition, msg.Offset), logFields)
-		}
-	}()
-	go func() {
-		for msg := range producer.Errors() {
-			logFields := make(watermill.LogFields, 1)
-			logFields["topic"] = msg.Msg.Topic
-			logger.Error(msg.Error(), msg.Err, logFields)
-		}
-	}()
-
 	return &PublisherAsync{
-		config:   config,
-		producer: producer,
-		logger:   logger,
+		config:        config,
+		producer:      producer,
+		logger:        logger,
+		errorsChan:    producer.Errors(),
+		successesChan: producer.Successes(),
 	}, nil
 }
 
