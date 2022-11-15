@@ -72,10 +72,10 @@ func DefaultSaramaAsyncPublisherConfig() *sarama.Config {
 	return config
 }
 
-// Publish publishes message to Kafka.
+// Publish publishes message(s) to Kafka.
 //
-// Publish is blocking and wait for ack from Kafka.
-// When one of messages delivery fails - function is interrupted.
+// Publish is not blocking
+// Make sure you are reading from Errors and Successes channels
 func (p *PublisherAsync) Publish(topic string, msgs ...*message.Message) error {
 	if p.closed {
 		return errors.New("publisher closed")
