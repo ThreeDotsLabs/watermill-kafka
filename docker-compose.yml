@@ -10,7 +10,6 @@ services:
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_CLIENT_PORT: "2181"
       ZOOKEEPER_TICK_TIME: "2000"
-    network_mode: "host"
 
   kafka1:
     image: confluentinc/cp-kafka:5.3.1
@@ -19,9 +18,10 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9091,PLAINTEXT_HOST://localhost:29091
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9091,PLAINTEXT_HOST://kafka1:29091
       KAFKA_BROKER_ID: 1
-    network_mode: "host"
+    ports:
+      - 9091:9091
     restart: unless-stopped
 
   kafka2:
@@ -31,9 +31,10 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092,PLAINTEXT_HOST://kafka2:29092
       KAFKA_BROKER_ID: 2
-    network_mode: "host"
+    ports:
+      - 9092:9092
     restart: unless-stopped
 
   kafka3:
@@ -43,9 +44,10 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9093,PLAINTEXT_HOST://localhost:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9093,PLAINTEXT_HOST://kafka3:29093
       KAFKA_BROKER_ID: 3
-    network_mode: "host"
+    ports:
+      - 9093:9093
     restart: unless-stopped
 
   kafka4:
@@ -55,9 +57,10 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9094,PLAINTEXT_HOST://localhost:29094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka4:9094,PLAINTEXT_HOST://kafka4:29094
       KAFKA_BROKER_ID: 4
-    network_mode: "host"
+    ports:
+      - 9094:9094
     restart: unless-stopped
 
   kafka5:
@@ -67,7 +70,8 @@ services:
       env_file:
         - dev/docker-kafka.env
       environment:
-        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9095,PLAINTEXT_HOST://localhost:29095
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka5:9095,PLAINTEXT_HOST://kafka5:29095
         KAFKA_BROKER_ID: 5
-      network_mode: "host"
+      ports:
+        - 9095:9095
       restart: unless-stopped
