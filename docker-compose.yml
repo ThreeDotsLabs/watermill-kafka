@@ -18,8 +18,9 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9091,PLAINTEXT_HOST://kafka1:29091
       KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9091,INTERNAL://0.0.0.0:29091
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9091,INTERNAL://kafka1:29091
     ports:
       - 9091:9091
     restart: unless-stopped
@@ -31,8 +32,9 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092,PLAINTEXT_HOST://kafka2:29092
       KAFKA_BROKER_ID: 2
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9092,INTERNAL://kafka2:29092
     ports:
       - 9092:9092
     restart: unless-stopped
@@ -44,8 +46,9 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9093,PLAINTEXT_HOST://kafka3:29093
       KAFKA_BROKER_ID: 3
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9093,INTERNAL://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9093,INTERNAL://kafka3:29093
     ports:
       - 9093:9093
     restart: unless-stopped
@@ -57,8 +60,9 @@ services:
     env_file:
       - dev/docker-kafka.env
     environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka4:9094,PLAINTEXT_HOST://kafka4:29094
       KAFKA_BROKER_ID: 4
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9094,INTERNAL://0.0.0.0:29094
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9094,INTERNAL://kafka4:29094
     ports:
       - 9094:9094
     restart: unless-stopped
@@ -70,8 +74,9 @@ services:
       env_file:
         - dev/docker-kafka.env
       environment:
-        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka5:9095,PLAINTEXT_HOST://kafka5:29095
         KAFKA_BROKER_ID: 5
+        KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9095,INTERNAL://0.0.0.0:29095
+        KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9095,INTERNAL://kafka5:29095
       ports:
         - 9095:9095
       restart: unless-stopped
