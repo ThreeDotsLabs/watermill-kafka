@@ -2,19 +2,19 @@ up:
 	docker-compose up -d
 
 test:
-	go test -parallel 20 ./...
+	go test ./...
 
 test_v:
-	go test -parallel 20 -v ./...
+	go test -v ./...
 
 test_short:
-	go test -parallel 20 ./... -short
+	go test ./... -short
 
 test_race:
 	go test ./... -short -race
 
 test_stress:
-	go test -v -tags=stress -parallel 15 -timeout=45m ./...
+	go test -v -tags=stress -timeout=45m ./...
 
 test_reconnect:
 	go test -tags=reconnect ./...
