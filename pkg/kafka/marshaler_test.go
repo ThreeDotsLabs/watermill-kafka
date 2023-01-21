@@ -52,7 +52,7 @@ func BenchmarkDefaultMarshaler_Unmarshal(b *testing.B) {
 	consumedMsg := producerToConsumerMessage(marshaled)
 
 	for i := 0; i < b.N; i++ {
-		_ = m.Unmarshal(consumedMsg)
+		_, _ = m.Unmarshal(consumedMsg)
 	}
 }
 
