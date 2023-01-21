@@ -2,13 +2,13 @@ package kafka
 
 import (
 	"context"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 	"sync"
 	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -107,14 +107,13 @@ func (c SubscriberConfig) Validate() error {
 //
 // Custom config can be passed to NewSubscriber and NewPublisher.
 //
-//		saramaConfig := DefaultSaramaSubscriberConfig()
-//		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+//	saramaConfig := DefaultSaramaSubscriberConfig()
+//	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 //
-//		subscriberConfig.OverwriteSaramaConfig = saramaConfig
+//	subscriberConfig.OverwriteSaramaConfig = saramaConfig
 //
-//		subscriber, err := NewSubscriber(subscriberConfig, logger)
-//		// ...
-//
+//	subscriber, err := NewSubscriber(subscriberConfig, logger)
+//	// ...
 func DefaultSaramaSubscriberConfig() *sarama.Config {
 	config := sarama.NewConfig()
 	config.Version = sarama.V1_0_0_0
@@ -143,7 +142,7 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string) (<-chan *messa
 	s.logger.Info("Subscribing to Kafka topic", logFields)
 
 	// we don't want to have buffered channel to not consume message from Kafka when consumer is not consuming
-	output := make(chan *message.Message, 0)
+	output := make(chan *message.Message)
 
 	consumeClosed, err := s.consumeMessages(ctx, topic, output, logFields)
 	if err != nil {
