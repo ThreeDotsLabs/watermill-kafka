@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -490,24 +491,17 @@ func (consumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error { return 
 func (consumerGroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
 
 func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	kafkaMessages := claim.Messages()
 	logFields := h.messageLogFields.Copy().Add(watermill.LogFields{
 		"kafka_partition":      claim.Partition(),
 		"kafka_initial_offset": claim.InitialOffset(),
 	})
-	h.logger.Debug("Consume claimed", logFields)
 
-	for {
+	for kafkaMsg := range claim.Messages() {
+		h.logger.Debug("Message claimed", logFields)
+		if err := h.messageHandler.processMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
+			return err
+		}
 		select {
-		case kafkaMsg, ok := <-kafkaMessages:
-			if !ok {
-				h.logger.Debug("kafkaMessages is closed, stopping consumerGroupHandler", logFields)
-				return nil
-			}
-			if err := h.messageHandler.processMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
-				return err
-			}
-
 		case <-h.closing:
 			h.logger.Debug("Subscriber is closing, stopping consumerGroupHandler", logFields)
 			return nil
@@ -515,8 +509,12 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 		case <-h.ctx.Done():
 			h.logger.Debug("Ctx was cancelled, stopping consumerGroupHandler", logFields)
 			return nil
+		default:
+			continue
 		}
 	}
+
+	return nil
 }
 
 type messageHandler struct {
@@ -617,7 +615,7 @@ func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
 		}
 	}()
 
-	if err := clusterAdmin.CreateTopic(topic, s.config.InitializeTopicDetails, false); err != nil {
+	if err := clusterAdmin.CreateTopic(topic, s.config.InitializeTopicDetails, false); err != nil && !strings.Contains(err.Error(), "Topic with this name already exists") {
 		return errors.Wrap(err, "cannot create topic")
 	}
 

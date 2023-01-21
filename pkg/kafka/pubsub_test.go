@@ -28,7 +28,7 @@ func kafkaBrokers() []string {
 }
 
 func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (*kafka.Publisher, *kafka.Subscriber) {
-	logger := watermill.NewStdLogger(true, false)
+	logger := watermill.NewStdLogger(true, true)
 
 	var err error
 	var publisher *kafka.Publisher
