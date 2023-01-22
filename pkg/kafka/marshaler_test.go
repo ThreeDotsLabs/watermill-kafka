@@ -34,7 +34,7 @@ func BenchmarkDefaultMarshaler_Marshal(b *testing.B) {
 	msg.Metadata.Set("foo", "bar")
 
 	for i := 0; i < b.N; i++ {
-		m.Marshal("foo", msg)
+		_, _ = m.Marshal("foo", msg)
 	}
 }
 
@@ -52,7 +52,7 @@ func BenchmarkDefaultMarshaler_Unmarshal(b *testing.B) {
 	consumedMsg := producerToConsumerMessage(marshaled)
 
 	for i := 0; i < b.N; i++ {
-		m.Unmarshal(consumedMsg)
+		_, _ = m.Unmarshal(consumedMsg)
 	}
 }
 

@@ -2,13 +2,14 @@ package kafka
 
 import (
 	"context"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -107,14 +108,13 @@ func (c SubscriberConfig) Validate() error {
 //
 // Custom config can be passed to NewSubscriber and NewPublisher.
 //
-//		saramaConfig := DefaultSaramaSubscriberConfig()
-//		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+//	saramaConfig := DefaultSaramaSubscriberConfig()
+//	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 //
-//		subscriberConfig.OverwriteSaramaConfig = saramaConfig
+//	subscriberConfig.OverwriteSaramaConfig = saramaConfig
 //
-//		subscriber, err := NewSubscriber(subscriberConfig, logger)
-//		// ...
-//
+//	subscriber, err := NewSubscriber(subscriberConfig, logger)
+//	// ...
 func DefaultSaramaSubscriberConfig() *sarama.Config {
 	config := sarama.NewConfig()
 	config.Version = sarama.V1_0_0_0
@@ -143,7 +143,7 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string) (<-chan *messa
 	s.logger.Info("Subscribing to Kafka topic", logFields)
 
 	// we don't want to have buffered channel to not consume message from Kafka when consumer is not consuming
-	output := make(chan *message.Message, 0)
+	output := make(chan *message.Message)
 
 	consumeClosed, err := s.consumeMessages(ctx, topic, output, logFields)
 	if err != nil {
@@ -491,24 +491,17 @@ func (consumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error { return 
 func (consumerGroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
 
 func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	kafkaMessages := claim.Messages()
 	logFields := h.messageLogFields.Copy().Add(watermill.LogFields{
 		"kafka_partition":      claim.Partition(),
 		"kafka_initial_offset": claim.InitialOffset(),
 	})
-	h.logger.Debug("Consume claimed", logFields)
 
-	for {
+	for kafkaMsg := range claim.Messages() {
+		h.logger.Debug("Message claimed", logFields)
+		if err := h.messageHandler.processMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
+			return err
+		}
 		select {
-		case kafkaMsg, ok := <-kafkaMessages:
-			if !ok {
-				h.logger.Debug("kafkaMessages is closed, stopping consumerGroupHandler", logFields)
-				return nil
-			}
-			if err := h.messageHandler.processMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
-				return err
-			}
-
 		case <-h.closing:
 			h.logger.Debug("Subscriber is closing, stopping consumerGroupHandler", logFields)
 			return nil
@@ -516,8 +509,12 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 		case <-h.ctx.Done():
 			h.logger.Debug("Ctx was cancelled, stopping consumerGroupHandler", logFields)
 			return nil
+		default:
+			continue
 		}
 	}
+
+	return nil
 }
 
 type messageHandler struct {
@@ -618,7 +615,7 @@ func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
 		}
 	}()
 
-	if err := clusterAdmin.CreateTopic(topic, s.config.InitializeTopicDetails, false); err != nil {
+	if err := clusterAdmin.CreateTopic(topic, s.config.InitializeTopicDetails, false); err != nil && !strings.Contains(err.Error(), "Topic with this name already exists") {
 		return errors.Wrap(err, "cannot create topic")
 	}
 
