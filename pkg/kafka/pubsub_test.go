@@ -213,7 +213,7 @@ func TestCtxValues(t *testing.T) {
 	require.NoError(t, pub.Close())
 }
 
-func TestManualCommit(t *testing.T) {
+func TestPublishSubscribe_AutoCommitDisabled(t *testing.T) {
 	features := tests.Features{
 		ConsumerGroups:      true,
 		ExactlyOnceDelivery: false,
