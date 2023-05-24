@@ -4,10 +4,10 @@ go 1.17
 
 require (
 	github.com/Shopify/sarama v1.38.0
-	github.com/ThreeDotsLabs/watermill v1.2.0-rc.11
+	github.com/ThreeDotsLabs/watermill v1.2.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama v0.31.0
 )
 
