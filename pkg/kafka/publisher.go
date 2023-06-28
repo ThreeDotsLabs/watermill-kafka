@@ -105,24 +105,28 @@ func (p *Publisher) Publish(topic string, msgs ...*message.Message) error {
 	logFields := make(watermill.LogFields, 4)
 	logFields["topic"] = topic
 
+	var kafkaMsgs []*sarama.ProducerMessage
+
 	for _, msg := range msgs {
-		logFields["message_uuid"] = msg.UUID
-		p.logger.Trace("Sending message to Kafka", logFields)
+		//logFields["message_uuid"] = msg.UUID
+		//p.logger.Trace("Sending message to Kafka", logFields)
 
 		kafkaMsg, err := p.config.Marshaler.Marshal(topic, msg)
 		if err != nil {
 			return errors.Wrapf(err, "cannot marshal message %s", msg.UUID)
 		}
 
-		partition, offset, err := p.producer.SendMessage(kafkaMsg)
-		if err != nil {
-			return errors.Wrapf(err, "cannot produce message %s", msg.UUID)
-		}
+		kafkaMsgs = append(kafkaMsgs, kafkaMsg)
 
-		logFields["kafka_partition"] = partition
-		logFields["kafka_partition_offset"] = offset
+		//logFields["kafka_partition"] = partition
+		//logFields["kafka_partition_offset"] = offset
 
-		p.logger.Trace("Message sent to Kafka", logFields)
+		//p.logger.Trace("Message sent to Kafka", logFields)
+	}
+
+	err := p.producer.SendMessages(kafkaMsgs)
+	if err != nil {
+		return errors.Wrapf(err, "cannot produce message")
 	}
 
 	return nil
