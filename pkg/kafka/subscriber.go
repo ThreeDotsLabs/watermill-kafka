@@ -9,7 +9,6 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -38,6 +37,10 @@ func NewSubscriber(
 
 	if logger == nil {
 		logger = watermill.NopLogger{}
+	}
+
+	if config.OTELEnabled && config.Tracer == nil {
+		config.Tracer = NewOTELSaramaTracer()
 	}
 
 	logger = logger.With(watermill.LogFields{
@@ -75,7 +78,13 @@ type SubscriberConfig struct {
 	InitializeTopicDetails *sarama.TopicDetail
 
 	// If true then each consumed message will be wrapped with Opentelemetry tracing, provided by otelsarama.
+	//
+	// Deprecated: pass OTELSaramaTracer to Tracer field instead.
 	OTELEnabled bool
+
+	// Tracer is used to trace Kafka messages.
+	// If nil, then no tracing will be used.
+	Tracer SaramaTracer
 }
 
 // NoSleep can be set to SubscriberConfig.NackResendSleep and SubscriberConfig.ReconnectRetrySleep.
@@ -231,9 +240,9 @@ func (s *Subscriber) consumeMessages(
 	}()
 
 	if s.config.ConsumerGroup == "" {
-		consumeMessagesClosed, err = s.consumeWithoutConsumerGroups(ctx, client, topic, output, logFields, s.config.OTELEnabled)
+		consumeMessagesClosed, err = s.consumeWithoutConsumerGroups(ctx, client, topic, output, logFields, s.config.Tracer)
 	} else {
-		consumeMessagesClosed, err = s.consumeGroupMessages(ctx, client, topic, output, logFields, s.config.OTELEnabled)
+		consumeMessagesClosed, err = s.consumeGroupMessages(ctx, client, topic, output, logFields, s.config.Tracer)
 	}
 	if err != nil {
 		s.logger.Debug(
@@ -262,7 +271,7 @@ func (s *Subscriber) consumeGroupMessages(
 	topic string,
 	output chan *message.Message,
 	logFields watermill.LogFields,
-	otelEnabled bool,
+	tracer SaramaTracer,
 ) (chan struct{}, error) {
 	// Start a new consumer group
 	group, err := sarama.NewConsumerGroupFromClient(s.config.ConsumerGroup, client)
@@ -283,8 +292,8 @@ func (s *Subscriber) consumeGroupMessages(
 		messageLogFields: logFields,
 	}
 
-	if otelEnabled {
-		handler = otelsarama.WrapConsumerGroupHandler(handler)
+	if tracer != nil {
+		handler = tracer.WrapConsumerGroupHandler(handler)
 	}
 
 	go func() {
@@ -367,15 +376,15 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 	topic string,
 	output chan *message.Message,
 	logFields watermill.LogFields,
-	otelEnabled bool,
+	tracer SaramaTracer,
 ) (chan struct{}, error) {
 	consumer, err := sarama.NewConsumerFromClient(client)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create client")
 	}
 
-	if otelEnabled {
-		consumer = otelsarama.WrapConsumer(consumer)
+	if tracer != nil {
+		consumer = tracer.WrapConsumer(consumer)
 	}
 
 	partitions, err := consumer.Partitions(topic)
@@ -396,8 +405,8 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 			return nil, errors.Wrap(err, "failed to start consumer for partition")
 		}
 
-		if otelEnabled {
-			partitionConsumer = otelsarama.WrapPartitionConsumer(partitionConsumer)
+		if tracer != nil {
+			partitionConsumer = tracer.WrapPartitionConsumer(partitionConsumer)
 		}
 
 		messageHandler := s.createMessagesHandler(output)
