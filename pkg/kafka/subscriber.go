@@ -85,6 +85,23 @@ type SubscriberConfig struct {
 	// Tracer is used to trace Kafka messages.
 	// If nil, then no tracing will be used.
 	Tracer SaramaTracer
+
+	// When set to not nil, consumption will be performed in batches and this configuration will be used
+	BatchConsumerConfig *BatchConsumerConfig
+}
+
+// BatchConsumerConfig configuration to be applied when the selected type of
+// consumption is batch.
+// Batch consumption means that the maxBatchSizeEvents will be read or maxWaitTime waited
+// the events will then be sent to the output channel.
+// ACK / NACK are handled properly to ensure at-least-once consumption.
+type BatchConsumerConfig struct {
+	// MaxBatchSize max amount of elements the batch will contain.
+	// Default value is 100 if nothing is specified.
+	MaxBatchSize int16
+	// MaxWaitTime max time that it will be waited until MaxBatchSize elements are received.
+	// Default value is 100ms if nothing is specified.
+	MaxWaitTime time.Duration
 }
 
 // NoSleep can be set to SubscriberConfig.NackResendSleep and SubscriberConfig.ReconnectRetrySleep.
@@ -99,6 +116,14 @@ func (c *SubscriberConfig) setDefaults() {
 	}
 	if c.ReconnectRetrySleep == 0 {
 		c.ReconnectRetrySleep = time.Second
+	}
+	if c.BatchConsumerConfig != nil {
+		if c.BatchConsumerConfig.MaxBatchSize == 0 {
+			c.BatchConsumerConfig.MaxBatchSize = 100
+		}
+		if c.BatchConsumerConfig.MaxWaitTime == 0 {
+			c.BatchConsumerConfig.MaxWaitTime = time.Millisecond * 100
+		}
 	}
 }
 
@@ -442,35 +467,28 @@ func (s *Subscriber) consumePartition(
 
 	kafkaMessages := partitionConsumer.Messages()
 
-	for {
-		select {
-		case kafkaMsg := <-kafkaMessages:
-			if kafkaMsg == nil {
-				s.logger.Debug("kafkaMsg is closed, stopping consumePartition", logFields)
-				return
-			}
-			if err := messageHandler.ProcessMessage(ctx, kafkaMsg, nil, logFields); err != nil {
-				return
-			}
-		case <-s.closing:
-			s.logger.Debug("Subscriber is closing, stopping consumePartition", logFields)
-			return
-
-		case <-ctx.Done():
-			s.logger.Debug("Ctx was cancelled, stopping consumePartition", logFields)
-			return
-		}
-	}
+	<-messageHandler.ProcessMessages(ctx, kafkaMessages, nil, logFields)
 }
 
 func (s *Subscriber) createMessagesHandler(output chan *message.Message) MessageHandler {
-	return messageHandler{
-		outputChannel:   output,
-		unmarshaler:     s.config.Unmarshaler,
-		nackResendSleep: s.config.NackResendSleep,
-		logger:          s.logger,
-		closing:         s.closing,
+	if s.config.BatchConsumerConfig == nil {
+		return NewMessageHandler(
+			output,
+			s.config.Unmarshaler,
+			s.logger,
+			s.closing,
+			s.config.NackResendSleep,
+		)
 	}
+	return NewBatchedMessageHandler(
+		output,
+		s.config.Unmarshaler,
+		s.logger,
+		s.closing,
+		s.config.BatchConsumerConfig.MaxBatchSize,
+		s.config.BatchConsumerConfig.MaxWaitTime,
+		s.config.NackResendSleep,
+	)
 }
 
 func (s *Subscriber) Close() error {
@@ -505,25 +523,7 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 		"kafka_initial_offset": claim.InitialOffset(),
 	})
 
-	for kafkaMsg := range claim.Messages() {
-		h.logger.Debug("Message claimed", logFields)
-		if err := h.messageHandler.ProcessMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
-			return err
-		}
-		select {
-		case <-h.closing:
-			h.logger.Debug("Subscriber is closing, stopping consumerGroupHandler", logFields)
-			return nil
-
-		case <-h.ctx.Done():
-			h.logger.Debug("Ctx was cancelled, stopping consumerGroupHandler", logFields)
-			return nil
-		default:
-			continue
-		}
-	}
-
-	return nil
+	return <-h.messageHandler.ProcessMessages(h.ctx, claim.Messages(), sess, logFields)
 }
 
 func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
