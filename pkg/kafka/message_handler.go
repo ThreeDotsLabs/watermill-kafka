@@ -10,6 +10,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+// MessageHandler an event processor that is able to receive a ConsumerMessage
+// and perform some task with it. Once consumed, if there is a session, it will the offset
+// will be marked as processed.
+type MessageHandler interface {
+	ProcessMessage(
+		ctx context.Context,
+		kafkaMsg *sarama.ConsumerMessage,
+		sess sarama.ConsumerGroupSession,
+		messageLogFields watermill.LogFields,
+	) error
+}
+
 type messageHandler struct {
 	outputChannel chan<- *message.Message
 	unmarshaler   Unmarshaler
@@ -20,7 +32,7 @@ type messageHandler struct {
 	closing chan struct{}
 }
 
-func (h messageHandler) processMessage(
+func (h messageHandler) ProcessMessage(
 	ctx context.Context,
 	kafkaMsg *sarama.ConsumerMessage,
 	sess sarama.ConsumerGroupSession,

@@ -427,7 +427,7 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 func (s *Subscriber) consumePartition(
 	ctx context.Context,
 	partitionConsumer sarama.PartitionConsumer,
-	messageHandler messageHandler,
+	messageHandler MessageHandler,
 	partitionConsumersWg *sync.WaitGroup,
 	logFields watermill.LogFields,
 ) {
@@ -449,7 +449,7 @@ func (s *Subscriber) consumePartition(
 				s.logger.Debug("kafkaMsg is closed, stopping consumePartition", logFields)
 				return
 			}
-			if err := messageHandler.processMessage(ctx, kafkaMsg, nil, logFields); err != nil {
+			if err := messageHandler.ProcessMessage(ctx, kafkaMsg, nil, logFields); err != nil {
 				return
 			}
 		case <-s.closing:
@@ -463,7 +463,7 @@ func (s *Subscriber) consumePartition(
 	}
 }
 
-func (s *Subscriber) createMessagesHandler(output chan *message.Message) messageHandler {
+func (s *Subscriber) createMessagesHandler(output chan *message.Message) MessageHandler {
 	return messageHandler{
 		outputChannel:   output,
 		unmarshaler:     s.config.Unmarshaler,
@@ -489,7 +489,7 @@ func (s *Subscriber) Close() error {
 
 type consumerGroupHandler struct {
 	ctx              context.Context
-	messageHandler   messageHandler
+	messageHandler   MessageHandler
 	logger           watermill.LoggerAdapter
 	closing          chan struct{}
 	messageLogFields watermill.LogFields
@@ -507,7 +507,7 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 
 	for kafkaMsg := range claim.Messages() {
 		h.logger.Debug("Message claimed", logFields)
-		if err := h.messageHandler.processMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
+		if err := h.messageHandler.ProcessMessage(h.ctx, kafkaMsg, sess, logFields); err != nil {
 			return err
 		}
 		select {
