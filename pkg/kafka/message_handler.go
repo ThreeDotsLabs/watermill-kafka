@@ -208,7 +208,7 @@ func (h *batchedMessageHandler) ProcessMessages(
 					finish <- err
 					return
 				}
-				buffer = append(buffer, &msg)
+				buffer = append(buffer, msg)
 			case <-timer:
 				if len(buffer) > 0 {
 					h.logger.Trace("Timer expired, sending already fetched events.", logFields)
@@ -344,7 +344,7 @@ func (mp messageParser) prepareAndProcessMessage(
 	kafkaMsg *sarama.ConsumerMessage,
 	logger watermill.LoggerAdapter,
 	messageLogFields watermill.LogFields,
-) (messageHolder, error) {
+) (*messageHolder, error) {
 	receivedMsgLogFields := messageLogFields.Add(watermill.LogFields{
 		"kafka_partition_offset": kafkaMsg.Offset,
 		"kafka_partition":        kafkaMsg.Partition,
@@ -354,14 +354,14 @@ func (mp messageParser) prepareAndProcessMessage(
 	msg, err := mp.unmarshaler.Unmarshal(kafkaMsg)
 	if err != nil {
 		// resend will make no sense, stopping consumerGroupHandler
-		return messageHolder{}, errors.Wrap(err, "message unmarshal failed")
+		return nil, errors.Wrap(err, "message unmarshal failed")
 	}
 	ctx = addMessageContextFields(ctx, kafkaMsg)
 	msg.SetContext(ctx)
 	receivedMsgLogFields = receivedMsgLogFields.Add(watermill.LogFields{
 		"message_uuid": msg.UUID,
 	})
-	return messageHolder{
+	return &messageHolder{
 		kafkaMessage: kafkaMsg,
 		message:      msg,
 		logFields:    receivedMsgLogFields,
