@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func BenchmarkBatchMessageHandler(b *testing.B) {
+func BenchmarkPartitionConcurrentMessageHandler(b *testing.B) {
 	tests := []struct {
 		name                     string
 		hasConsumerGroup         bool
@@ -36,7 +36,7 @@ func BenchmarkBatchMessageHandler(b *testing.B) {
 					hasCountingConsumerGroup: test.hasCountingConsumerGroup,
 				}
 				received := 0
-				messages, receivedMessages, _, err := testBatchEventConsumption(
+				messages, receivedMessages, _, err := testConcurrentEventConsumption(
 					b,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {

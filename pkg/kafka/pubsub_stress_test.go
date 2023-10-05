@@ -27,8 +27,8 @@ func TestPublishSubscribe_stress(t *testing.T) {
 				GuaranteedOrder:     false,
 				Persistent:          true,
 			},
-			createPubSub(nil),
-			createPubSubWithConsumerGroup(nil),
+			createPubSub(kafka.Default),
+			createPubSubWithConsumerGroup(kafka.Default),
 		)
 	})
 
@@ -45,8 +45,8 @@ func TestPublishSubscribe_stress(t *testing.T) {
 				GuaranteedOrder:     true,
 				Persistent:          true,
 			},
-			createPartitionedPubSub(cfg),
-			createPubSubWithConsumerGroup(cfg),
+			createPartitionedPubSub(kafka.Batch),
+			createPubSubWithConsumerGroup(kafka.Batch),
 		)
 	})
 }

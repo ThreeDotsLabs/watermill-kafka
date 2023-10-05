@@ -33,6 +33,7 @@ type Subscriber interface {
 However, it implements 2 different consumption models:
 - one in-flight message
 - batch consumption
+- partition concurrent
 
 ### One in-flight message (default)
 
@@ -62,12 +63,28 @@ Some examples:
 To configure it:
 
 ```go
-kafka.SubscriberConfig{
-    // ... other settings here
-    BatchConsumerConfig: &kafka.BatchConsumerConfig{
-        MaxBatchSize: 10,
-        MaxWaitTime:  100 * time.Millisecond,
-    },
+    kafka.SubscriberConfig{
+      // ... other settings here
+      ConsumerModel:       kafka.Default,
+      BatchConsumerConfig: &kafka.BatchConsumerConfig{
+          MaxBatchSize: 10,
+          MaxWaitTime:  100 * time.Millisecond,
+      },
+}
+
+```
+
+### Partition Concurrent
+
+Partition concurrent works similar to the default consumption model. The main difference is that it allows up to N in-flight models, where N is the number of partitions.
+This allows higher concurrency of processing while easily preserving order.
+
+To configure it:
+
+```go
+    kafka.SubscriberConfig{
+      // ... other settings here
+      ConsumerModel: kafka.PartitionConcurrent,
 }
 
 ```

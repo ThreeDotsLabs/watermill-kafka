@@ -86,6 +86,8 @@ type SubscriberConfig struct {
 	// If nil, then no tracing will be used.
 	Tracer SaramaTracer
 
+	// ConsumerModel indicates which type of consumer should be used
+	ConsumerModel ConsumerModel
 	// When set to not nil, consumption will be performed in batches and this configuration will be used
 	BatchConsumerConfig *BatchConsumerConfig
 }
@@ -104,6 +106,20 @@ type BatchConsumerConfig struct {
 	MaxWaitTime time.Duration
 }
 
+// ConsumerModel indicates the type of consumer model that will be used.
+type ConsumerModel int
+
+const (
+	// Default is a model when only one message is sent to the customer and customer needs to ACK the message
+	// to receive the next.
+	Default ConsumerModel = iota
+	// Batch works by sending multiple events in a batch
+	Batch
+	// PartitionConcurrent has one message sent to the customer per partition and customer needs to ACK the message
+	// to receive the next message for the partition.
+	PartitionConcurrent
+)
+
 // NoSleep can be set to SubscriberConfig.NackResendSleep and SubscriberConfig.ReconnectRetrySleep.
 const NoSleep time.Duration = -1
 
@@ -117,7 +133,11 @@ func (c *SubscriberConfig) setDefaults() {
 	if c.ReconnectRetrySleep == 0 {
 		c.ReconnectRetrySleep = time.Second
 	}
-	if c.BatchConsumerConfig != nil {
+	switch c.ConsumerModel {
+	case Batch:
+		if c.BatchConsumerConfig == nil {
+			c.BatchConsumerConfig = &BatchConsumerConfig{}
+		}
 		if c.BatchConsumerConfig.MaxBatchSize == 0 {
 			c.BatchConsumerConfig.MaxBatchSize = 100
 		}
@@ -471,7 +491,8 @@ func (s *Subscriber) consumePartition(
 }
 
 func (s *Subscriber) createMessagesHandler(output chan *message.Message) MessageHandler {
-	if s.config.BatchConsumerConfig == nil {
+	switch s.config.ConsumerModel {
+	case Default:
 		return NewMessageHandler(
 			output,
 			s.config.Unmarshaler,
@@ -479,16 +500,21 @@ func (s *Subscriber) createMessagesHandler(output chan *message.Message) Message
 			s.closing,
 			s.config.NackResendSleep,
 		)
+	case Batch:
+		return NewBatchedMessageHandler(
+			output,
+			s.config.Unmarshaler,
+			s.logger,
+			s.closing,
+			s.config.BatchConsumerConfig.MaxBatchSize,
+			s.config.BatchConsumerConfig.MaxWaitTime,
+			s.config.NackResendSleep,
+		)
+	case PartitionConcurrent:
+		return NewConcurrentMessageHandler(output, s.config.Unmarshaler, s.logger, s.closing, s.config.NackResendSleep)
+	default:
+		panic("Invalid configuration")
 	}
-	return NewBatchedMessageHandler(
-		output,
-		s.config.Unmarshaler,
-		s.logger,
-		s.closing,
-		s.config.BatchConsumerConfig.MaxBatchSize,
-		s.config.BatchConsumerConfig.MaxWaitTime,
-		s.config.NackResendSleep,
-	)
 }
 
 func (s *Subscriber) Close() error {

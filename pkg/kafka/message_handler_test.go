@@ -41,7 +41,7 @@ func TestBatchMessageHandler(t *testing.T) {
 					hasCountingConsumerGroup: true,
 				}
 				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -77,7 +77,7 @@ func TestBatchMessageHandler(t *testing.T) {
 					hasCountingConsumerGroup: true,
 				}
 				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -113,7 +113,7 @@ func TestBatchMessageHandler(t *testing.T) {
 					hasCountingConsumerGroup: true,
 				}
 				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -150,7 +150,7 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 				received := 0
 				nacked := false
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -195,7 +195,7 @@ func TestBatchMessageHandler(t *testing.T) {
 				nacked := false
 				start := time.Now()
 				var ackTime time.Time
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -238,7 +238,7 @@ func TestBatchMessageHandler(t *testing.T) {
 					hasCountingConsumerGroup: true,
 				}
 				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testEventConsumption(
+				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -282,7 +282,7 @@ func TestBatchMessageHandler(t *testing.T) {
 					hasConsumerGroup:         test.hasConsumerGroup,
 					hasCountingConsumerGroup: true,
 				}
-				_, receivedMessages, _, err := testEventConsumption(
+				_, receivedMessages, _, err := testBatchEventConsumption(
 					t,
 					testConfig,
 					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
@@ -357,9 +357,28 @@ type testConfig struct {
 	hasCountingConsumerGroup bool
 }
 
+func testBatchEventConsumption(
+	t testing.TB,
+	testConfig testConfig,
+	outputChannelConsumer func(<-chan *message.Message, chan<- struct{}) (*message.Message, bool),
+) ([]*sarama.ConsumerMessage, []*message.Message, *mockConsumerGroupSession, error) {
+	return testEventConsumption(t, testConfig, func(output chan<- *message.Message, closing chan struct{}) MessageHandler {
+		return NewBatchedMessageHandler(
+			output,
+			DefaultMarshaler{},
+			watermill.NopLogger{},
+			closing,
+			testConfig.maxBatchSize,
+			testConfig.batchWait,
+			testConfig.nackResendSleep,
+		)
+	}, outputChannelConsumer)
+}
+
 func testEventConsumption(
 	t testing.TB,
 	testConfig testConfig,
+	createHandler func(chan<- *message.Message, chan struct{}) MessageHandler,
 	outputChannelConsumer func(<-chan *message.Message, chan<- struct{}) (*message.Message, bool),
 ) ([]*sarama.ConsumerMessage, []*message.Message, *mockConsumerGroupSession, error) {
 	var consumerGroupSession *mockConsumerGroupSession = newMockConsumerGroupSession()
@@ -375,34 +394,14 @@ func testEventConsumption(
 	outputChannel := make(chan *message.Message)
 	defer close(outputChannel)
 	closing := make(chan struct{})
-	handler := NewBatchedMessageHandler(
-		outputChannel,
-		DefaultMarshaler{},
-		watermill.NopLogger{},
-		closing,
-		testConfig.maxBatchSize,
-		testConfig.batchWait,
-		testConfig.nackResendSleep,
-	)
+	handler := createHandler(outputChannel, closing)
 
 	ctx := context.Background()
 
 	kafkaMessages := make(chan *sarama.ConsumerMessage, testConfig.eventCount)
 	messages := make([]*sarama.ConsumerMessage, 0)
 	for i := 0; i < testConfig.eventCount; i++ {
-		msg := &sarama.ConsumerMessage{
-			Topic:          "topic",
-			Partition:      int32(i % testConfig.partitionCount),
-			Key:            []byte(fmt.Sprintf("key%d", i)),
-			Value:          []byte(fmt.Sprintf("some-value-%d", i)),
-			Offset:         int64(i),
-			Timestamp:      time.Now(),
-			BlockTimestamp: time.Now(),
-			Headers: []*sarama.RecordHeader{{
-				Key:   []byte(UUIDHeaderKey),
-				Value: []byte(watermill.NewUUID()),
-			}},
-		}
+		msg := generateMessage("topic", i%testConfig.partitionCount, i)
 		kafkaMessages <- msg
 		messages = append(messages, msg)
 	}
@@ -426,6 +425,22 @@ func testEventConsumption(
 	mutex.Lock()
 	defer mutex.Unlock()
 	return messages, receivedMessages, consumerGroupSession, err
+}
+
+func generateMessage(topic string, partition, offset int) *sarama.ConsumerMessage {
+	return &sarama.ConsumerMessage{
+		Topic:          "topic",
+		Partition:      int32(partition),
+		Key:            []byte(fmt.Sprintf("key%d", offset)),
+		Value:          []byte(fmt.Sprintf("some-value-%d", offset)),
+		Offset:         int64(offset),
+		Timestamp:      time.Now(),
+		BlockTimestamp: time.Now(),
+		Headers: []*sarama.RecordHeader{{
+			Key:   []byte(UUIDHeaderKey),
+			Value: []byte(watermill.NewUUID()),
+		}},
+	}
 }
 
 func testSameEventsAndSameOrder(t testing.TB, receivedMessages []*message.Message, messages []*sarama.ConsumerMessage) {

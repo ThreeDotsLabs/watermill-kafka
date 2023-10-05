@@ -27,7 +27,7 @@ func kafkaBrokers() []string {
 	return []string{"localhost:9091", "localhost:9092", "localhost:9093", "localhost:9094", "localhost:9095"}
 }
 
-func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string, batchConsumerConfig *kafka.BatchConsumerConfig) (*kafka.Publisher, *kafka.Subscriber) {
+func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string, consumerModel kafka.ConsumerModel) (*kafka.Publisher, *kafka.Subscriber) {
 	logger := watermill.NewStdLogger(true, true)
 
 	var err error
@@ -72,7 +72,10 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 					NumPartitions:     8,
 					ReplicationFactor: 1,
 				},
-				BatchConsumerConfig: batchConsumerConfig,
+				BatchConsumerConfig: &kafka.BatchConsumerConfig{
+					MaxBatchSize: 10,
+					MaxWaitTime:  100 * time.Millisecond,
+				},
 			},
 			logger,
 		)
@@ -94,44 +97,46 @@ func generatePartitionKey(topic string, msg *message.Message) (string, error) {
 	return msg.Metadata.Get("partition_key"), nil
 }
 
-func createPubSubWithConsumerGroup(batchConsumerConfig *kafka.BatchConsumerConfig) func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
+func createPubSubWithConsumerGroup(consumerModel kafka.ConsumerModel) func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
 	return func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
-		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, batchConsumerConfig)
+		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, consumerModel)
 	}
 }
 
-func createPubSub(batchConsumerConfig *kafka.BatchConsumerConfig) func(t *testing.T) (message.Publisher, message.Subscriber) {
+func createPubSub(consumerModel kafka.ConsumerModel) func(t *testing.T) (message.Publisher, message.Subscriber) {
 	return func(t *testing.T) (message.Publisher, message.Subscriber) {
-		return createPubSubWithConsumerGroup(batchConsumerConfig)(t, "test")
+		return createPubSubWithConsumerGroup(consumerModel)(t, "test")
 	}
 }
 
-func createPartitionedPubSub(batchConsumerConfig *kafka.BatchConsumerConfig) func(*testing.T) (message.Publisher, message.Subscriber) {
+func createPartitionedPubSub(consumerModel kafka.ConsumerModel) func(*testing.T) (message.Publisher, message.Subscriber) {
 	return func(t *testing.T) (message.Publisher, message.Subscriber) {
-		return newPubSub(t, kafka.NewWithPartitioningMarshaler(generatePartitionKey), "test", batchConsumerConfig)
+		return newPubSub(t, kafka.NewWithPartitioningMarshaler(generatePartitionKey), "test", consumerModel)
 	}
 }
 
-func createNoGroupPubSub(batchConsumerConfig *kafka.BatchConsumerConfig) func(t *testing.T) (message.Publisher, message.Subscriber) {
+func createNoGroupPubSub(consumerModel kafka.ConsumerModel) func(t *testing.T) (message.Publisher, message.Subscriber) {
 	return func(t *testing.T) (message.Publisher, message.Subscriber) {
-		return newPubSub(t, kafka.DefaultMarshaler{}, "", batchConsumerConfig)
+		return newPubSub(t, kafka.DefaultMarshaler{}, "", consumerModel)
 	}
 }
 
 func TestPublishSubscribe(t *testing.T) {
 	testCases := []struct {
-		name                string
-		batchConsumerConfig *kafka.BatchConsumerConfig
+		name          string
+		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name: "no batch consumer config",
+			name:          "no batch consumer config",
+			consumerModel: kafka.Default,
 		},
 		{
-			name: "with batch config",
-			batchConsumerConfig: &kafka.BatchConsumerConfig{
-				MaxBatchSize: 10,
-				MaxWaitTime:  100 * time.Millisecond,
-			},
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
 	for _, test := range testCases {
@@ -146,8 +151,8 @@ func TestPublishSubscribe(t *testing.T) {
 			tests.TestPubSub(
 				t,
 				features,
-				createPubSub(test.batchConsumerConfig),
-				createPubSubWithConsumerGroup(test.batchConsumerConfig),
+				createPubSub(test.consumerModel),
+				createPubSubWithConsumerGroup(test.consumerModel),
 			)
 		})
 	}
@@ -158,25 +163,36 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
-	t.Run("no batch consumer config", func(t *testing.T) {
-		tests.TestPubSub(
-			t,
-			tests.Features{
-				ConsumerGroups:      true,
-				ExactlyOnceDelivery: false,
-				GuaranteedOrder:     true,
-				Persistent:          true,
-			},
-			createPartitionedPubSub(nil),
-			createPubSubWithConsumerGroup(nil),
-		)
-	})
+	testCases := []struct {
+		name          string
+		consumerModel kafka.ConsumerModel
+	}{
+		{
+			name:          "no batch consumer config",
+			consumerModel: kafka.Default,
+		},
+		{
+			name:          "with concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			tests.TestPubSub(
+				t,
+				tests.Features{
+					ConsumerGroups:      true,
+					ExactlyOnceDelivery: false,
+					GuaranteedOrder:     true,
+					Persistent:          true,
+				},
+				createPartitionedPubSub(test.consumerModel),
+				createPubSubWithConsumerGroup(test.consumerModel),
+			)
+		})
+	}
 
 	t.Run("with batch consumer config", func(t *testing.T) {
-		cfg := &kafka.BatchConsumerConfig{
-			MaxBatchSize: 10,
-			MaxWaitTime:  100 * time.Millisecond,
-		}
 		testBulkMessageHandlerPubSub(
 			t,
 			tests.Features{
@@ -185,8 +201,8 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 				GuaranteedOrder:     true,
 				Persistent:          true,
 			},
-			createPartitionedPubSub(cfg),
-			createPubSubWithConsumerGroup(cfg),
+			createPartitionedPubSub(kafka.Batch),
+			createPubSubWithConsumerGroup(kafka.Batch),
 		)
 	})
 }
@@ -196,18 +212,20 @@ func TestNoGroupSubscriber(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 	testCases := []struct {
-		name                string
-		batchConsumerConfig *kafka.BatchConsumerConfig
+		name          string
+		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name: "no batch consumer config",
+			name:          "no batch consumer config",
+			consumerModel: kafka.Default,
 		},
 		{
-			name: "with batch config",
-			batchConsumerConfig: &kafka.BatchConsumerConfig{
-				MaxBatchSize: 10,
-				MaxWaitTime:  100 * time.Millisecond,
-			},
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
 	for _, test := range testCases {
@@ -221,7 +239,7 @@ func TestNoGroupSubscriber(t *testing.T) {
 					Persistent:                       true,
 					NewSubscriberReceivesOldMessages: true,
 				},
-				createNoGroupPubSub(test.batchConsumerConfig),
+				createNoGroupPubSub(test.consumerModel),
 				nil,
 			)
 		})
@@ -230,23 +248,25 @@ func TestNoGroupSubscriber(t *testing.T) {
 
 func TestCtxValues(t *testing.T) {
 	tests := []struct {
-		name                string
-		batchConsumerConfig *kafka.BatchConsumerConfig
+		name          string
+		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name: "no batch consumer config",
+			name:          "no batch consumer config",
+			consumerModel: kafka.Default,
 		},
 		{
-			name: "with batch config",
-			batchConsumerConfig: &kafka.BatchConsumerConfig{
-				MaxBatchSize: 10,
-				MaxWaitTime:  10 * time.Millisecond,
-			},
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "", test.batchConsumerConfig)
+			pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "", test.consumerModel)
 			topicName := "topic_" + watermill.NewUUID()
 
 			var messagesToPublish []*message.Message
