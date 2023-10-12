@@ -59,8 +59,8 @@ func (h *batchedMessageHandler) startProcessing() {
 	mustSleep := h.nackResendSleep != NoSleep
 	logFields := watermill.LogFields{}
 	sendDeadline := time.Now().Add(h.maxWaitTime)
+	timer := time.NewTimer(h.maxWaitTime)
 	for {
-		timer := time.After(sendDeadline.Sub(time.Now()))
 		timerExpired := false
 		select {
 		case message, ok := <-h.messages:
@@ -68,7 +68,7 @@ func (h *batchedMessageHandler) startProcessing() {
 				h.logger.Debug("Messages channel is closed", logFields)
 			}
 			buffer = append(buffer, message)
-		case <-timer:
+		case <-timer.C:
 			if len(buffer) > 0 {
 				h.logger.Trace("Timer expired, sending already fetched events.", logFields)
 			}
@@ -95,6 +95,7 @@ func (h *batchedMessageHandler) startProcessing() {
 				time.Sleep(h.nackResendSleep)
 			}
 		}
+		timer.Reset(sendDeadline.Sub(time.Now()))
 	}
 }
 
