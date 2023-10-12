@@ -26,6 +26,7 @@ type batchedMessageHandler struct {
 	logger        watermill.LoggerAdapter
 	closing       chan struct{}
 	messageParser messageParser
+	messages      chan *messageHolder
 }
 
 func NewBatchedMessageHandler(
@@ -37,7 +38,7 @@ func NewBatchedMessageHandler(
 	maxWaitTime time.Duration,
 	nackResendSleep time.Duration,
 ) MessageHandler {
-	return &batchedMessageHandler{
+	handler := &batchedMessageHandler{
 		outputChannel:   outputChannel,
 		maxBatchSize:    maxBatchSize,
 		maxWaitTime:     maxWaitTime,
@@ -47,6 +48,53 @@ func NewBatchedMessageHandler(
 		messageParser: messageParser{
 			unmarshaler: unmarshaler,
 		},
+		messages: make(chan *messageHolder, 0),
+	}
+	go handler.startProcessing()
+	return handler
+}
+
+func (h *batchedMessageHandler) startProcessing() {
+	buffer := make([]*messageHolder, 0, h.maxBatchSize)
+	mustSleep := h.nackResendSleep != NoSleep
+	logFields := watermill.LogFields{}
+	sendDeadline := time.Now().Add(h.maxWaitTime)
+	for {
+		timer := time.After(sendDeadline.Sub(time.Now()))
+		timerExpired := false
+		select {
+		case message, ok := <-h.messages:
+			if !ok {
+				h.logger.Debug("Messages channel is closed", logFields)
+			}
+			buffer = append(buffer, message)
+		case <-timer:
+			if len(buffer) > 0 {
+				h.logger.Trace("Timer expired, sending already fetched events.", logFields)
+			}
+			timerExpired = true
+			break
+		case <-h.closing:
+			h.logger.Debug("Subscriber is closing, stopping messageHandler", logFields)
+			return
+		}
+		size := len(buffer)
+		if (timerExpired && size > 0) || size == int(h.maxBatchSize) {
+			sendDeadline = time.Now().Add(h.maxWaitTime)
+			timerExpired = false
+			newBuffer, err := h.processBatch(buffer)
+			if err != nil {
+				return
+			}
+			if newBuffer == nil {
+				return
+			}
+			buffer = newBuffer
+			// if there are events in the buffer, it means there was NACKs, so we wait
+			if len(buffer) > 0 && mustSleep {
+				time.Sleep(h.nackResendSleep)
+			}
+		}
 	}
 }
 
@@ -55,68 +103,31 @@ func (h *batchedMessageHandler) ProcessMessages(
 	kafkaMessages <-chan *sarama.ConsumerMessage,
 	sess sarama.ConsumerGroupSession,
 	logFields watermill.LogFields,
-) <-chan error {
-	finish := make(chan error)
-	go func() {
-		buffer := make([]*messageHolder, 0, h.maxBatchSize)
-		defer close(finish)
-		mustSleep := h.nackResendSleep != NoSleep
-	EventProcessingLoop:
-		timer := time.After(h.maxWaitTime)
-		timerExpired := false
-		for {
-			select {
-			case kafkaMsg := <-kafkaMessages:
-				if kafkaMsg == nil {
-					h.logger.Debug("kafkaMsg is closed, stopping ProcessMessages", logFields)
-					return
-				}
-				msg, err := h.messageParser.prepareAndProcessMessage(ctx, kafkaMsg, h.logger, logFields)
-				if err != nil {
-					finish <- err
-					return
-				}
-				buffer = append(buffer, msg)
-			case <-timer:
-				if len(buffer) > 0 {
-					h.logger.Trace("Timer expired, sending already fetched events.", logFields)
-				}
-				timerExpired = true
-				break
-			case <-h.closing:
-				h.logger.Debug("Subscriber is closing, stopping messageHandler", logFields)
-				return
-			case <-ctx.Done():
-				h.logger.Debug("Ctx was cancelled, stopping messageHandler", logFields)
-				return
+) error {
+	for {
+		select {
+		case kafkaMsg := <-kafkaMessages:
+			if kafkaMsg == nil {
+				h.logger.Debug("kafkaMsg is closed, stopping ProcessMessages", logFields)
+				return nil
 			}
-			size := len(buffer)
-			if (timerExpired && size > 0) || size == int(h.maxBatchSize) {
-				timerExpired = false
-				newBuffer, err := h.processBatch(ctx, buffer, sess)
-				if err != nil {
-					finish <- err
-					break
-				}
-				if newBuffer == nil {
-					break
-				}
-				buffer = newBuffer
-				// if there are events in the buffer, it means there was NACKs, so we wait
-				if len(buffer) > 0 && mustSleep {
-					time.Sleep(h.nackResendSleep)
-				}
+			msg, err := h.messageParser.prepareAndProcessMessage(ctx, kafkaMsg, h.logger, logFields, sess)
+			if err != nil {
+				return err
 			}
-			goto EventProcessingLoop
+			h.messages <- msg
+		case <-h.closing:
+			h.logger.Debug("Subscriber is closing, stopping messageHandler", logFields)
+			return nil
+		case <-ctx.Done():
+			h.logger.Debug("Ctx was cancelled, stopping messageHandler", logFields)
+			return nil
 		}
-	}()
-	return finish
+	}
 }
 
 func (h *batchedMessageHandler) processBatch(
-	ctx context.Context,
 	buffer []*messageHolder,
-	sess sarama.ConsumerGroupSession,
 ) ([]*messageHolder, error) {
 	waitChannels := make([]<-chan bool, 0, len(buffer))
 	for _, msgHolder := range buffer {
@@ -155,12 +166,13 @@ func (h *batchedMessageHandler) processBatch(
 				return nil, nil
 			}
 			topicAndPartition := fmt.Sprintf("%s-%d", msgHolder.kafkaMessage.Topic, msgHolder.kafkaMessage.Partition)
-			if !ack {
+			_, partitionNacked := nackedPartitions[topicAndPartition]
+			if !ack || partitionNacked {
 				newBuffer = append(newBuffer, msgHolder.Copy())
 				nackedPartitions[topicAndPartition] = struct{}{}
 				break
 			}
-			if _, partitionNacked := nackedPartitions[topicAndPartition]; !partitionNacked && ack {
+			if !partitionNacked && ack {
 				lastComittableMessages[topicAndPartition] = msgHolder
 			}
 		}
@@ -169,10 +181,10 @@ func (h *batchedMessageHandler) processBatch(
 	// If a session is provided, we mark the latest committable message for
 	// each partition as done. This is required, because if we did not mark anything we might re-process
 	// events unnecessarily. If we marked the latest in the bulk, we could lose NACKed messages.
-	if sess != nil {
-		for _, lastComittable := range lastComittableMessages {
+	for _, lastComittable := range lastComittableMessages {
+		if lastComittable.sess != nil {
 			h.logger.Trace("Marking offset as complete for", lastComittable.logFields)
-			sess.MarkMessage(lastComittable.kafkaMessage, "")
+			lastComittable.sess.MarkMessage(lastComittable.kafkaMessage, "")
 		}
 	}
 

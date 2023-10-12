@@ -19,7 +19,7 @@ type MessageHandler interface {
 		kafkaMessages <-chan *sarama.ConsumerMessage,
 		sess sarama.ConsumerGroupSession,
 		messageLogFields watermill.LogFields,
-	) <-chan error
+	) error
 }
 
 type messageHandler struct {
@@ -55,31 +55,25 @@ func (h messageHandler) ProcessMessages(
 	kafkaMessages <-chan *sarama.ConsumerMessage,
 	sess sarama.ConsumerGroupSession,
 	logFields watermill.LogFields,
-) <-chan error {
-	finish := make(chan error)
-	go func() {
-		defer close(finish)
-		for {
-			select {
-			case kafkaMsg := <-kafkaMessages:
-				if kafkaMsg == nil {
-					h.logger.Debug("kafkaMsg is closed, stopping ProcessMessages", logFields)
-					return
-				}
-				if err := h.processMessage(ctx, kafkaMsg, sess, logFields); err != nil {
-					finish <- err
-					return
-				}
-			case <-h.closing:
-				h.logger.Debug("Subscriber is closing, ", logFields)
-				return
-			case <-ctx.Done():
-				h.logger.Debug("Ctx was cancelled, ", logFields)
-				return
+) error {
+	for {
+		select {
+		case kafkaMsg := <-kafkaMessages:
+			if kafkaMsg == nil {
+				h.logger.Debug("kafkaMsg is closed, stopping ProcessMessages", logFields)
+				return nil
 			}
+			if err := h.processMessage(ctx, kafkaMsg, sess, logFields); err != nil {
+				return err
+			}
+		case <-h.closing:
+			h.logger.Debug("Subscriber is closing, ", logFields)
+			return nil
+		case <-ctx.Done():
+			h.logger.Debug("Ctx was cancelled, ", logFields)
+			return nil
 		}
-	}()
-	return finish
+	}
 }
 
 func (h messageHandler) processMessage(
@@ -88,7 +82,7 @@ func (h messageHandler) processMessage(
 	sess sarama.ConsumerGroupSession,
 	messageLogFields watermill.LogFields,
 ) error {
-	msgHolder, err := h.messageParser.prepareAndProcessMessage(ctx, kafkaMsg, h.logger, messageLogFields)
+	msgHolder, err := h.messageParser.prepareAndProcessMessage(ctx, kafkaMsg, h.logger, messageLogFields, sess)
 	if err != nil {
 		return err
 	}
@@ -124,6 +118,7 @@ ResendLoop:
 
 			// reset acks, etc.
 			msg = msg.Copy()
+			msg.SetContext(ctx)
 			if h.nackResendSleep != NoSleep {
 				time.Sleep(h.nackResendSleep)
 			}
@@ -145,6 +140,7 @@ type messageHolder struct {
 	kafkaMessage *sarama.ConsumerMessage
 	message      *message.Message
 	logFields    watermill.LogFields
+	sess         sarama.ConsumerGroupSession
 }
 
 func (mh messageHolder) Copy() *messageHolder {
@@ -154,6 +150,7 @@ func (mh messageHolder) Copy() *messageHolder {
 		kafkaMessage: mh.kafkaMessage,
 		message:      msg,
 		logFields:    mh.logFields,
+		sess:         mh.sess,
 	}
 }
 
@@ -174,6 +171,7 @@ func (mp messageParser) prepareAndProcessMessage(
 	kafkaMsg *sarama.ConsumerMessage,
 	logger watermill.LoggerAdapter,
 	messageLogFields watermill.LogFields,
+	sess sarama.ConsumerGroupSession,
 ) (*messageHolder, error) {
 	receivedMsgLogFields := messageLogFields.Add(watermill.LogFields{
 		"kafka_partition_offset": kafkaMsg.Offset,
@@ -195,6 +193,7 @@ func (mp messageParser) prepareAndProcessMessage(
 		kafkaMessage: kafkaMsg,
 		message:      msg,
 		logFields:    receivedMsgLogFields,
+		sess:         sess,
 	}, nil
 }
 

@@ -487,7 +487,7 @@ func (s *Subscriber) consumePartition(
 
 	kafkaMessages := partitionConsumer.Messages()
 
-	<-messageHandler.ProcessMessages(ctx, kafkaMessages, nil, logFields)
+	messageHandler.ProcessMessages(ctx, kafkaMessages, nil, logFields)
 }
 
 func (s *Subscriber) createMessagesHandler(output chan *message.Message) MessageHandler {
@@ -549,7 +549,7 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 		"kafka_initial_offset": claim.InitialOffset(),
 	})
 
-	return <-h.messageHandler.ProcessMessages(h.ctx, claim.Messages(), sess, logFields)
+	return h.messageHandler.ProcessMessages(h.ctx, claim.Messages(), sess, logFields)
 }
 
 func (s *Subscriber) SubscribeInitialize(topic string) (err error) {

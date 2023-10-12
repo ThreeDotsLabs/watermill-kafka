@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -21,277 +20,271 @@ func TestBatchMessageHandler(t *testing.T) {
 		hasConsumerGroup bool
 	}{
 		{
-			name:             "no consumer group session",
-			hasConsumerGroup: false,
-		},
-		{
 			name:             "consumer group session is provided",
 			hasConsumerGroup: true,
+		},
+		{
+			name:             "no consumer group session",
+			hasConsumerGroup: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Run("consumes all events in order", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               10,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
+			t.Run("consumes all events in order even if coming from different partitions", func(t *testing.T) {
+				testConfig := newTestConfig(test.hasConsumerGroup, 3)
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 1, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 2, 0))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
 				}
-				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						select {
-						case msg := <-outputChannel:
-							received++
-							msg.Ack()
-							if received == testConfig.eventCount {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				testSameEventsAndSameOrder(t, receivedMessages, messages)
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", testConfig.partitionCount)
-					for i := 0; i < testConfig.partitionCount; i++ {
-						consumerGroupSession.AssertCalled(t, "MarkMessage", messages[testConfig.eventCount-testConfig.partitionCount+i], "")
-					}
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 3)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+
+				// we do not get more events because the batch was not processed yet
+				waitOrFail(t, 100*time.Millisecond, outputChannel)
+
+				// we ACK the messages
+				for _, msg := range receivedMessages {
+					msg.Ack()
+				}
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[0], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[1], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[2], "")
 				}
 			})
 
 			t.Run("sends events if less than batch size", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               5,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
+				testConfig := newTestConfig(test.hasConsumerGroup, 10)
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 1, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 2, 0))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
 				}
-				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						select {
-						case msg := <-outputChannel:
-							received++
-							msg.Ack()
-							if received == testConfig.eventCount {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				testSameEventsAndSameOrder(t, receivedMessages, messages)
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", testConfig.partitionCount)
-					for i := 0; i < testConfig.partitionCount; i++ {
-						consumerGroupSession.AssertCalled(t, "MarkMessage", messages[testConfig.eventCount-testConfig.partitionCount+i], "")
-					}
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 3)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+
+				// we do not get more events because the batch was not processed yet
+				waitOrFail(t, 100*time.Millisecond, outputChannel)
+
+				// we ACK the messages
+				for _, msg := range receivedMessages {
+					msg.Ack()
+				}
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[0], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[1], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[2], "")
 				}
 			})
 
 			t.Run("processes all events when there are more than the batch size", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               15,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
+				testConfig := newTestConfig(test.hasConsumerGroup, 2)
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 1, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 2, 0))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
 				}
-				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						select {
-						case msg := <-outputChannel:
-							received++
-							msg.Ack()
-							if received == testConfig.eventCount {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				testSameEventsAndSameOrder(t, receivedMessages, messages)
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", testConfig.partitionCount*2)
-					for i := 0; i < testConfig.partitionCount; i++ {
-						consumerGroupSession.AssertCalled(t, "MarkMessage", messages[testConfig.eventCount-testConfig.partitionCount+i], "")
-					}
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 3)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				// we ACK the messages
+				for _, msg := range receivedMessages {
+					msg.Ack()
+				}
+				receivedMessages = append(receivedMessages, <-outputChannel)
+
+				// we do not get more events because the batch was not processed yet
+				waitOrFail(t, 100*time.Millisecond, outputChannel)
+
+				// we ACK the messages
+				for _, msg := range receivedMessages {
+					msg.Ack()
+				}
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[0], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[1], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[2], "")
 				}
 			})
 
-			t.Run("NACKed events are re-sent", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               1,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
+			t.Run("NACKed events are re-sent (and following events too)", func(t *testing.T) {
+				testConfig := newTestConfig(test.hasConsumerGroup, 10)
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 4)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 1))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 1, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 1, 1))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
 				}
-				received := 0
-				nacked := false
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						received++
-						select {
-						case msg := <-outputChannel:
-							if !nacked {
-								msg.Nack()
-								nacked = true
-							} else {
-								msg.Ack()
-							}
-							if received == testConfig.eventCount+1 {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				require.Len(t, receivedMessages, len(messages)+1)
-				assertSameEvent(t, receivedMessages[0], messages[0])
-				assertSameEvent(t, receivedMessages[1], messages[0])
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", 1)
-					consumerGroupSession.AssertCalled(t, "MarkMessage", messages[0], "")
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 4)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages[0].Ack()
+				receivedMessages[1].Ack()
+				receivedMessages[2].Nack()
+				receivedMessages[3].Ack()
+				receivedMessages = receivedMessages[:0]
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+
+				// we do not get more events because the batch was not processed yet
+				waitOrFail(t, 100*time.Millisecond, outputChannel)
+
+				receivedMessages[0].Ack()
+				receivedMessages[1].Ack()
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend[2:])
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 2 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 2)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[1], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[3], "")
+				}
+			})
+
+			t.Run("ACKed event are not re-sent if a NACKed follows", func(t *testing.T) {
+				testConfig := newTestConfig(test.hasConsumerGroup, 10)
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 1))
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 2))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
+				}
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 3)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages[0].Ack()
+				receivedMessages[1].Nack()
+				receivedMessages[2].Ack()
+				receivedMessages = receivedMessages[:0]
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				// we do not get more events because the batch was not processed yet
+				waitOrFail(t, 100*time.Millisecond, outputChannel)
+				receivedMessages[0].Ack()
+				receivedMessages[1].Ack()
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend[1:])
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 2 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 2)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[0], "")
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[2], "")
 				}
 			})
 
 			t.Run("NACK wait period is applied", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               1,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					nackResendSleep:          1 * time.Second,
-					hasCountingConsumerGroup: true,
+				testConfig := newTestConfig(test.hasConsumerGroup, 10)
+				testConfig.nackResendSleep = 500 * time.Millisecond
+				sess, mock := consumerGroupSession(testConfig)
+				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				defer close(closing)
+				defer close(outputChannel)
+				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+				messagesToSend := make([]*sarama.ConsumerMessage, 0, 1)
+				messagesToSend = append(messagesToSend, generateMessage("topic1", 0, 0))
+				for _, msg := range messagesToSend {
+					kafkaMessages <- msg
 				}
-				received := 0
-				nacked := false
-				start := time.Now()
-				var ackTime time.Time
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						received++
-						select {
-						case msg := <-outputChannel:
-							if !nacked {
-								msg.Nack()
-								nacked = true
-							} else {
-								ackTime = time.Now()
-								msg.Ack()
-							}
-							if received == testConfig.eventCount+1 {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				require.Len(t, receivedMessages, len(messages)+1)
-				assertSameEvent(t, receivedMessages[0], messages[0])
-				assertSameEvent(t, receivedMessages[1], messages[0])
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", 1)
-					consumerGroupSession.AssertCalled(t, "MarkMessage", messages[0], "")
+				go func() {
+					err := handler.ProcessMessages(context.Background(), kafkaMessages, sess, watermill.LogFields{})
+					assert.NoError(t, err)
+				}()
+				receivedMessages := make([]*message.Message, 0, 1)
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages[0].Nack()
+				waitOrFail(t, 400*time.Millisecond, outputChannel)
+				receivedMessages = receivedMessages[:0]
+				receivedMessages = append(receivedMessages, <-outputChannel)
+				receivedMessages[0].Ack()
+				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				if sess != nil {
+					assert.Eventually(t, func() bool { return len(mock.Calls) == 1 }, 1*time.Second, 10*time.Millisecond)
+					mock.AssertNumberOfCalls(t, "MarkMessage", 1)
+					mock.AssertCalled(t, "MarkMessage", messagesToSend[0], "")
 				}
-				assert.GreaterOrEqual(t, ackTime.Sub(start), 1*time.Second)
 			})
+		})
 
-			t.Run("NACKed second events results on partial batch", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               3,
-					maxBatchSize:             10,
-					partitionCount:           2,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
-				}
-				received := 0
-				messages, receivedMessages, consumerGroupSession, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						received++
-						select {
-						case msg := <-outputChannel:
-							if received == testConfig.eventCount {
-								msg.Nack()
-							} else {
-								msg.Ack()
-							}
-							if received == testConfig.eventCount+1 {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(t, err)
-				require.Len(t, receivedMessages, len(messages)+1)
-				assertSameEvent(t, receivedMessages[0], messages[0])
-				assertSameEvent(t, receivedMessages[1], messages[1])
-				assertSameEvent(t, receivedMessages[2], messages[2])
-				// the second event on the first partition is received twice
-				assertSameEvent(t, receivedMessages[3], messages[2])
-				if test.hasConsumerGroup {
-					consumerGroupSession.AssertNumberOfCalls(t, "MarkMessage", 3)
-					consumerGroupSession.AssertCalled(t, "MarkMessage", messages[0], "")
-					consumerGroupSession.AssertCalled(t, "MarkMessage", messages[1], "")
-					consumerGroupSession.AssertCalled(t, "MarkMessage", messages[2], "")
-				}
-			})
+		t.Run("closing without events", func(t *testing.T) {
+			testConfig := newTestConfig(test.hasConsumerGroup, 10)
+			closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+			defer close(outputChannel)
 
-			t.Run("closing without events", func(t *testing.T) {
-				testConfig := testConfig{
-					batchWait:                10 * time.Millisecond,
-					eventCount:               0,
-					maxBatchSize:             10,
-					partitionCount:           2,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: true,
-				}
-				_, receivedMessages, _, err := testBatchEventConsumption(
-					t,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						close(closing)
-						return nil, true
-					})
+			kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
+			go func() {
+				err := handler.ProcessMessages(context.Background(), kafkaMessages, nil, watermill.LogFields{})
 				assert.NoError(t, err)
-				require.Len(t, receivedMessages, 0)
-			})
+			}()
+			close(closing)
 		})
 	}
 }
@@ -348,39 +341,31 @@ func (cgs *mockConsumerGroupSessionNoCalls) MarkMessage(msg *sarama.ConsumerMess
 }
 
 type testConfig struct {
-	eventCount               int
 	batchWait                time.Duration
 	nackResendSleep          time.Duration
 	maxBatchSize             int16
-	partitionCount           int
 	hasConsumerGroup         bool
 	hasCountingConsumerGroup bool
 }
 
 func testBatchEventConsumption(
-	t testing.TB,
 	testConfig testConfig,
-	outputChannelConsumer func(<-chan *message.Message, chan<- struct{}) (*message.Message, bool),
-) ([]*sarama.ConsumerMessage, []*message.Message, *mockConsumerGroupSession, error) {
-	return testEventConsumption(t, testConfig, func(output chan<- *message.Message, closing chan struct{}) MessageHandler {
-		return NewBatchedMessageHandler(
-			output,
-			DefaultMarshaler{},
-			watermill.NopLogger{},
-			closing,
-			testConfig.maxBatchSize,
-			testConfig.batchWait,
-			testConfig.nackResendSleep,
-		)
-	}, outputChannelConsumer)
+) (chan<- struct{}, chan *message.Message, MessageHandler) {
+	outputChannel := make(chan *message.Message)
+	closing := make(chan struct{})
+	handler := NewBatchedMessageHandler(
+		outputChannel,
+		DefaultMarshaler{},
+		watermill.NopLogger{},
+		closing,
+		testConfig.maxBatchSize,
+		testConfig.batchWait,
+		testConfig.nackResendSleep,
+	)
+	return closing, outputChannel, handler
 }
 
-func testEventConsumption(
-	t testing.TB,
-	testConfig testConfig,
-	createHandler func(chan<- *message.Message, chan struct{}) MessageHandler,
-	outputChannelConsumer func(<-chan *message.Message, chan<- struct{}) (*message.Message, bool),
-) ([]*sarama.ConsumerMessage, []*message.Message, *mockConsumerGroupSession, error) {
+func consumerGroupSession(testConfig testConfig) (sarama.ConsumerGroupSession, *mock.Mock) {
 	var consumerGroupSession *mockConsumerGroupSession = newMockConsumerGroupSession()
 	var sess sarama.ConsumerGroupSession
 	if testConfig.hasConsumerGroup {
@@ -391,40 +376,7 @@ func testEventConsumption(
 			sess = &mockConsumerGroupSessionNoCalls{}
 		}
 	}
-	outputChannel := make(chan *message.Message)
-	defer close(outputChannel)
-	closing := make(chan struct{})
-	handler := createHandler(outputChannel, closing)
-
-	ctx := context.Background()
-
-	kafkaMessages := make(chan *sarama.ConsumerMessage, testConfig.eventCount)
-	messages := make([]*sarama.ConsumerMessage, 0)
-	for i := 0; i < testConfig.eventCount; i++ {
-		msg := generateMessage("topic", i%testConfig.partitionCount, i)
-		kafkaMessages <- msg
-		messages = append(messages, msg)
-	}
-	logFields := watermill.LogFields{}
-	var mutex sync.Mutex
-	receivedMessages := make([]*message.Message, 0, 100)
-	go func() {
-		for {
-			msg, exit := outputChannelConsumer(outputChannel, closing)
-			if msg != nil {
-				mutex.Lock()
-				receivedMessages = append(receivedMessages, msg)
-				mutex.Unlock()
-			}
-			if exit {
-				return
-			}
-		}
-	}()
-	err := <-handler.ProcessMessages(ctx, kafkaMessages, sess, logFields)
-	mutex.Lock()
-	defer mutex.Unlock()
-	return messages, receivedMessages, consumerGroupSession, err
+	return sess, &consumerGroupSession.Mock
 }
 
 func generateMessage(topic string, partition, offset int) *sarama.ConsumerMessage {
@@ -443,10 +395,40 @@ func generateMessage(topic string, partition, offset int) *sarama.ConsumerMessag
 	}
 }
 
-func testSameEventsAndSameOrder(t testing.TB, receivedMessages []*message.Message, messages []*sarama.ConsumerMessage) {
+func testSameEventsAndSameLocalOrder(t testing.TB, receivedMessages []*message.Message, messages []*sarama.ConsumerMessage) {
 	require.Len(t, messages, len(receivedMessages))
-	for idx, msg := range receivedMessages {
-		assertSameEvent(t, msg, messages[idx])
+	messagesPerPartition := make(map[int32][]*message.Message)
+	consumerMessagesPerPartition := make(map[int32][]*sarama.ConsumerMessage)
+	for i := 0; i < len(receivedMessages); i++ {
+		consumerMessage := messages[i]
+		partition := consumerMessage.Partition
+		consumerMessages, ok := consumerMessagesPerPartition[partition]
+		if !ok {
+			consumerMessages = make([]*sarama.ConsumerMessage, 0, 1)
+		}
+		consumerMessages = append(consumerMessages, consumerMessage)
+		consumerMessagesPerPartition[partition] = consumerMessages
+
+		kafkaMessage := receivedMessages[i]
+		partition, _ = MessagePartitionFromCtx(kafkaMessage.Context())
+		messages, ok := messagesPerPartition[partition]
+		if !ok {
+			messages = make([]*message.Message, 0, 1)
+		}
+		messages = append(messages, kafkaMessage)
+		messagesPerPartition[partition] = messages
+	}
+	require.Equal(t, len(messagesPerPartition), len(consumerMessagesPerPartition))
+	for partition, messages := range messagesPerPartition {
+		if consumerMessages, ok := consumerMessagesPerPartition[partition]; ok {
+			require.Len(t, messages, len(consumerMessages))
+			for idx, msg := range messages {
+				assertSameEvent(t, msg, consumerMessages[idx])
+			}
+		} else {
+			t.Fatal(fmt.Sprintf("No messages for partition: %d", partition))
+			t.Fail()
+		}
 	}
 }
 
@@ -456,4 +438,22 @@ func assertSameEvent(t testing.TB, message *message.Message, kafkaMessage *saram
 	assert.Equal(t, offset, kafkaMessage.Offset)
 	partition, _ := MessagePartitionFromCtx(message.Context())
 	assert.Equal(t, partition, kafkaMessage.Partition)
+}
+
+func waitOrFail(t testing.TB, duration time.Duration, outputChannel <-chan *message.Message) {
+	select {
+	case <-outputChannel:
+		t.Fatal("should not receive an event yet")
+		t.FailNow()
+	case <-time.After(duration):
+	}
+}
+
+func newTestConfig(hasConsumerGroup bool, batchSize int) testConfig {
+	return testConfig{
+		batchWait:                10 * time.Millisecond,
+		maxBatchSize:             int16(batchSize),
+		hasConsumerGroup:         hasConsumerGroup,
+		hasCountingConsumerGroup: true,
+	}
 }

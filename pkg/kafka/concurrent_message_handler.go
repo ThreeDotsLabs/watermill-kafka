@@ -44,7 +44,7 @@ func (h *concurrentMessageHandler) ProcessMessages(
 	kafkaMessages <-chan *sarama.ConsumerMessage,
 	sess sarama.ConsumerGroupSession,
 	logFields watermill.LogFields,
-) <-chan error {
+) error {
 	multiplexing := h.addToMultiplexing(h.closing, h.outputChannel)
 	handler := NewMessageHandler(multiplexing, h.unmarshaler, h.logger, h.closing, h.nackResendSleep)
 	return handler.ProcessMessages(ctx, kafkaMessages, sess, logFields)

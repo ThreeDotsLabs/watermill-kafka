@@ -12,72 +12,18 @@ import (
 )
 
 func BenchmarkSubscriber(b *testing.B) {
-	tests.BenchSubscriber(b, func(n int) (message.Publisher, message.Subscriber) {
-		logger := watermill.NopLogger{}
-
-		publisher, err := kafka.NewPublisher(kafka.PublisherConfig{
-			Brokers:   kafkaBrokers(),
-			Marshaler: kafka.DefaultMarshaler{},
-		}, logger)
-		if err != nil {
-			panic(err)
-		}
-
-		saramaConfig := kafka.DefaultSaramaSubscriberConfig()
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-		subscriber, err := kafka.NewSubscriber(
-			kafka.SubscriberConfig{
-				Brokers:               kafkaBrokers(),
-				Unmarshaler:           kafka.DefaultMarshaler{},
-				OverwriteSaramaConfig: saramaConfig,
-				ConsumerGroup:         "test",
-				ConsumerModel:         kafka.Default,
-			},
-			logger,
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		return publisher, subscriber
-	})
+	runBenchmark(b, kafka.Default)
 }
 
 func BenchmarkSubscriberBatch(b *testing.B) {
-	tests.BenchSubscriber(b, func(n int) (message.Publisher, message.Subscriber) {
-		logger := watermill.NopLogger{}
-
-		publisher, err := kafka.NewPublisher(kafka.PublisherConfig{
-			Brokers:   kafkaBrokers(),
-			Marshaler: kafka.DefaultMarshaler{},
-		}, logger)
-		if err != nil {
-			panic(err)
-		}
-
-		saramaConfig := kafka.DefaultSaramaSubscriberConfig()
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-		subscriber, err := kafka.NewSubscriber(
-			kafka.SubscriberConfig{
-				Brokers:               kafkaBrokers(),
-				Unmarshaler:           kafka.DefaultMarshaler{},
-				OverwriteSaramaConfig: saramaConfig,
-				ConsumerGroup:         "test",
-				ConsumerModel:         kafka.Batch,
-			},
-			logger,
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		return publisher, subscriber
-	})
+	runBenchmark(b, kafka.Batch)
 }
 
 func BenchmarkSubscriberPartitionConcurrent(b *testing.B) {
+	runBenchmark(b, kafka.PartitionConcurrent)
+}
+
+func runBenchmark(b *testing.B, consumerModel kafka.ConsumerModel) {
 	tests.BenchSubscriber(b, func(n int) (message.Publisher, message.Subscriber) {
 		logger := watermill.NopLogger{}
 
@@ -98,7 +44,7 @@ func BenchmarkSubscriberPartitionConcurrent(b *testing.B) {
 				Unmarshaler:           kafka.DefaultMarshaler{},
 				OverwriteSaramaConfig: saramaConfig,
 				ConsumerGroup:         "test",
-				ConsumerModel:         kafka.PartitionConcurrent,
+				ConsumerModel:         consumerModel,
 			},
 			logger,
 		)

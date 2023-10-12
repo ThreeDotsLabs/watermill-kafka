@@ -2,10 +2,6 @@ package kafka
 
 import (
 	"testing"
-	"time"
-
-	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkPartitionConcurrentMessageHandler(b *testing.B) {
@@ -25,37 +21,17 @@ func BenchmarkPartitionConcurrentMessageHandler(b *testing.B) {
 		},
 	}
 	for _, test := range tests {
-		b.Run(test.name, func(b *testing.B) {
-			b.Run("consumes all events in order", func(b *testing.B) {
-				testConfig := testConfig{
-					batchWait:                100 * time.Millisecond,
-					eventCount:               10000,
-					maxBatchSize:             10,
-					partitionCount:           5,
-					hasConsumerGroup:         test.hasConsumerGroup,
-					hasCountingConsumerGroup: test.hasCountingConsumerGroup,
-				}
-				received := 0
-				messages, receivedMessages, _, err := testConcurrentEventConsumption(
-					b,
-					testConfig,
-					func(outputChannel <-chan *message.Message, closing chan<- struct{}) (*message.Message, bool) {
-						exit := false
-						select {
-						case msg := <-outputChannel:
-							received++
-							msg.Ack()
-							if received == testConfig.eventCount {
-								exit = true
-								close(closing)
-							}
-							return msg, exit
-						}
-					})
-				assert.NoError(b, err)
-				testSameEventsAndSameOrder(b, receivedMessages, messages)
-			})
-
+		b.Run("consumes all events in order", func(b *testing.B) {
+			benchmarkConcurrentMessageHandler(b, test.hasConsumerGroup)
 		})
 	}
+}
+
+func benchmarkConcurrentMessageHandler(b *testing.B, hasConsumerGroup bool) {
+	testConfig := testConfig{
+		hasConsumerGroup:         hasConsumerGroup,
+		hasCountingConsumerGroup: false,
+	}
+
+	testBenchmark(b, testConfig, testConcurrentEventConsumption)
 }

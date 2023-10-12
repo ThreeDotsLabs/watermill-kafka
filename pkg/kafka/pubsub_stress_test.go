@@ -6,7 +6,6 @@ package kafka_test
 import (
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/pubsub/tests"
@@ -18,7 +17,7 @@ func init() {
 }
 
 func TestPublishSubscribe_stress(t *testing.T) {
-	t.Run("no batch consumer config", func(t *testing.T) {
+	t.Run("default consumption model", func(t *testing.T) {
 		tests.TestPubSubStressTest(
 			t,
 			tests.Features{
@@ -32,11 +31,7 @@ func TestPublishSubscribe_stress(t *testing.T) {
 		)
 	})
 
-	t.Run("with batch consumer config", func(t *testing.T) {
-		cfg := &kafka.BatchConsumerConfig{
-			MaxBatchSize: 10,
-			MaxWaitTime:  100 * time.Millisecond,
-		}
+	t.Run("batch consumption model", func(t *testing.T) {
 		testBulkMessageHandlerPubSubStressTest(
 			t,
 			tests.Features{
@@ -49,10 +44,24 @@ func TestPublishSubscribe_stress(t *testing.T) {
 			createPubSubWithConsumerGroup(kafka.Batch),
 		)
 	})
+
+	t.Run("partition concurrent consumption model", func(t *testing.T) {
+		tests.TestPubSubStressTest(
+			t,
+			tests.Features{
+				ConsumerGroups:      true,
+				ExactlyOnceDelivery: false,
+				GuaranteedOrder:     false,
+				Persistent:          true,
+			},
+			createPubSub(kafka.PartitionConcurrent),
+			createPubSubWithConsumerGroup(kafka.PartitionConcurrent),
+		)
+	})
 }
 
 func TestPublishSubscribe_ordered_stress(t *testing.T) {
-	t.Run("no batch consumer config", func(t *testing.T) {
+	t.Run("default consumption model", func(t *testing.T) {
 		tests.TestPubSubStressTest(
 			t,
 			tests.Features{
@@ -61,16 +70,12 @@ func TestPublishSubscribe_ordered_stress(t *testing.T) {
 				GuaranteedOrder:     true,
 				Persistent:          true,
 			},
-			createPartitionedPubSub(nil),
-			createPubSubWithConsumerGroup(nil),
+			createPartitionedPubSub(kafka.Default),
+			createPubSubWithConsumerGroup(kafka.Default),
 		)
 	})
 
-	t.Run("with batch consumer config", func(t *testing.T) {
-		cfg := &kafka.BatchConsumerConfig{
-			MaxBatchSize: 10,
-			MaxWaitTime:  100 * time.Millisecond,
-		}
+	t.Run("batch consumption model", func(t *testing.T) {
 		testBulkMessageHandlerPubSubStressTest(
 			t,
 			tests.Features{
@@ -79,8 +84,22 @@ func TestPublishSubscribe_ordered_stress(t *testing.T) {
 				GuaranteedOrder:     true,
 				Persistent:          true,
 			},
-			createPartitionedPubSub(cfg),
-			createPubSubWithConsumerGroup(cfg),
+			createPartitionedPubSub(kafka.Batch),
+			createPubSubWithConsumerGroup(kafka.Batch),
+		)
+	})
+
+	t.Run("partition concurrent consumption model", func(t *testing.T) {
+		tests.TestPubSubStressTest(
+			t,
+			tests.Features{
+				ConsumerGroups:      true,
+				ExactlyOnceDelivery: false,
+				GuaranteedOrder:     true,
+				Persistent:          true,
+			},
+			createPartitionedPubSub(kafka.PartitionConcurrent),
+			createPubSubWithConsumerGroup(kafka.PartitionConcurrent),
 		)
 	})
 }
