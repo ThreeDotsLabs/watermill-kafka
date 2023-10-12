@@ -41,6 +41,7 @@ func testBenchmark(
 	messagesInTest := 10_000
 	sess, _ := consumerGroupSession(testConfig)
 	kafkaMessages := make(chan *sarama.ConsumerMessage, messagesInTest)
+	defer close(kafkaMessages)
 	messagesToSend := make([]*sarama.ConsumerMessage, 0, messagesInTest)
 	for i := 0; i < messagesInTest; i++ {
 		msg := generateMessage("topic1", i%5, i/5)
