@@ -193,6 +193,9 @@ func TestCtxValues(t *testing.T) {
 		assert.True(t, ok)
 		assert.NotZero(t, kafkaMsgTimestamp)
 
+		_, ok = kafka.MessageKeyFromCtx(msg.Context())
+		assert.True(t, ok)
+
 		if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
 			// kafka partition offset is offset of the last message + 1
 			expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
