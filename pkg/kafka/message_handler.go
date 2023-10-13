@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// MessageHandler an event processor that is able to receive a ConsumerMessage
+// MessageHandler an message processor that is able to receive a ConsumerMessage
 // and perform some task with it. Once consumed, if there is a session, it will the offset
 // will be marked as processed.
 type MessageHandler interface {

@@ -30,8 +30,8 @@ type Subscriber interface {
 }
 ```
 
-However, it implements 2 different consumption models:
-- one in-flight message
+However, it implements several consumption models:
+- one in-flight message (default)
 - batch consumption
 - partition concurrent
 
@@ -46,15 +46,15 @@ This mode has the advantage of being simple and easily ensuring ordering.
 ### Batch consumption
 
 While the default model is simple to understand and safe, sometimes, a greater degree of parallelism is required. For example:
-- if you use a partitioner based on the key of the events, you can expect a partial order, that is, the events overall are not sorted, but they are sorted within the same partition. In that case, you can potentially process multiple events and the default can fall short
+- if you use a partitioner based on the key of the messages, you can expect a partial order, that is, the messages overall are not sorted, but they are sorted within the same partition. In that case, you can potentially process multiple messages and the default can fall short
 - for some reason you do not care about the order
 
 In this model, the customer can configure a `maxBatchSize` and `maxWaitTime`. The subscriber will wait until there are `maxBatchSize` messages ready or `maxWaitTime` is ellapsed.
 
-It will, then introduce those messages on the subscription channel. That means that a consumer can now get multiple events without having to ACK / NACK the previously received ones.
+It will, then introduce those messages on the subscription channel. That means that a consumer can now get multiple messages without having to ACK / NACK the previously received ones.
 
 This model deals with ACKs and NACKs properly by resetting the offset of the different (topics, partitions) tuples to the last
-event ACKed before a NACK for that (topic, partition) arrived.
+message ACKed before a NACK for that (topic, partition) arrived.
 
 Some examples:
 - all messages ACKed: offset of the latest message is marked as done

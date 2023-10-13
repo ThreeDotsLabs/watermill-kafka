@@ -30,7 +30,7 @@ func benchmarkBatchMessageHandler(b *testing.B, hasConsumerGroup bool) {
 		hasCountingConsumerGroup: false,
 	}
 
-	testBenchmark(b, testConfig, testBatchEventConsumption)
+	testBenchmark(b, testConfig, testBatchConsumption)
 }
 
 func testBenchmark(
@@ -69,5 +69,5 @@ func testBenchmark(
 			break
 		}
 	}
-	testSameEventsAndSameLocalOrder(b, receivedMessages, messagesToSend)
+	testSameMessagesAndLocalOrder(b, receivedMessages, messagesToSend)
 }

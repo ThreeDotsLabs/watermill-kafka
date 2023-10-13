@@ -21,17 +21,17 @@ func BenchmarkPartitionConcurrentMessageHandler(b *testing.B) {
 		},
 	}
 	for _, test := range tests {
-		b.Run("consumes all events in order", func(b *testing.B) {
-			benchmarkConcurrentMessageHandler(b, test.hasConsumerGroup)
+		b.Run("consumes all messages in order", func(b *testing.B) {
+			benchmarkPartitionConcurrentMessageHandler(b, test.hasConsumerGroup)
 		})
 	}
 }
 
-func benchmarkConcurrentMessageHandler(b *testing.B, hasConsumerGroup bool) {
+func benchmarkPartitionConcurrentMessageHandler(b *testing.B, hasConsumerGroup bool) {
 	testConfig := testConfig{
 		hasConsumerGroup:         hasConsumerGroup,
 		hasCountingConsumerGroup: false,
 	}
 
-	testBenchmark(b, testConfig, testConcurrentEventConsumption)
+	testBenchmark(b, testConfig, testPartitionConcurrentConsumption)
 }

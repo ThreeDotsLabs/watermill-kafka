@@ -10,7 +10,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-// batchedMessageHandler works by fetching up to N events from the provided channel
+// batchedMessageHandler works by fetching up to N messages from the provided channel
 // waiting until maxWaitTime.
 // It then takes the collected KafkaMessages and pushes them in order to outputChannel.
 // When all have been ACKed or NACKed, it updates the offsets with the highest ACKed
@@ -70,7 +70,7 @@ func (h *batchedMessageHandler) startProcessing() {
 			buffer = append(buffer, message)
 		case <-timer.C:
 			if len(buffer) > 0 {
-				h.logger.Trace("Timer expired, sending already fetched events.", logFields)
+				h.logger.Trace("Timer expired, sending already fetched messages.", logFields)
 			}
 			timerExpired = true
 			break
@@ -90,7 +90,7 @@ func (h *batchedMessageHandler) startProcessing() {
 				return
 			}
 			buffer = newBuffer
-			// if there are events in the buffer, it means there was NACKs, so we wait
+			// if there are messages in the buffer, it means there was NACKs, so we wait
 			if len(buffer) > 0 && mustSleep {
 				time.Sleep(h.nackResendSleep)
 			}
@@ -149,7 +149,7 @@ func (h *batchedMessageHandler) processBatch(
 		}
 	}
 
-	// we wait for all the events to be ACKed or NACKed
+	// we wait for all the messages to be ACKed or NACKed
 	// and we store for each partition the last message that was ACKed so we
 	// can mark the latest complete offset
 	lastComittableMessages := make(map[string]*messageHolder, 0)
@@ -157,7 +157,7 @@ func (h *batchedMessageHandler) processBatch(
 	newBuffer := make([]*messageHolder, 0, h.maxBatchSize)
 	for idx, waitChannel := range waitChannels {
 		msgHolder := buffer[idx]
-		h.logger.Trace("Waiting for event to be acked", msgHolder.logFields)
+		h.logger.Trace("Waiting for message to be acked", msgHolder.logFields)
 		select {
 		case ack, ok := <-waitChannel:
 			h.logger.Info("Received ACK / NACK response or closed", msgHolder.logFields)
@@ -181,7 +181,7 @@ func (h *batchedMessageHandler) processBatch(
 
 	// If a session is provided, we mark the latest committable message for
 	// each partition as done. This is required, because if we did not mark anything we might re-process
-	// events unnecessarily. If we marked the latest in the bulk, we could lose NACKed messages.
+	// messages unnecessarily. If we marked the latest in the bulk, we could lose NACKed messages.
 	for _, lastComittable := range lastComittableMessages {
 		if lastComittable.sess != nil {
 			h.logger.Trace("Marking offset as complete for", lastComittable.logFields)

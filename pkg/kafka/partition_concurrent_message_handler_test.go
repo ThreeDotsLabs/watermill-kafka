@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConcurrentMessageHandler(t *testing.T) {
+func TestPartitionConcurrentMessageHandler(t *testing.T) {
 	tests := []struct {
 		name             string
 		hasConsumerGroup bool
@@ -27,10 +27,10 @@ func TestConcurrentMessageHandler(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Run("consumes all events in order even if coming from different partitions", func(t *testing.T) {
+			t.Run("consumes all messages in order even if coming from different partitions", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 3)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testConcurrentEventConsumption(testConfig)
+				closing, outputChannel, handler := testPartitionConcurrentConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				partitions := 3
@@ -56,7 +56,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 						receivedMessages = append(receivedMessages, <-outputChannel)
 					}
 
-					// we do not get more events because the batch was not processed yet
+					// we do not get more messages because the batch was not processed yet
 					waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 					// we ACK the messages
@@ -65,7 +65,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 					}
 				}
 
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 9 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 9)
@@ -77,10 +77,10 @@ func TestConcurrentMessageHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("NACKed events are re-sent", func(t *testing.T) {
+			t.Run("NACKed messages are re-sent", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 3)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testConcurrentEventConsumption(testConfig)
+				closing, outputChannel, handler := testPartitionConcurrentConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				partitions := 3
@@ -109,7 +109,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 						receivedMessages = append(receivedMessages, <-outputChannel)
 					}
 
-					// we do not get more events because the batch was not processed yet
+					// we do not get more messages because the batch was not processed yet
 					waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 					// we ACK the messages
@@ -119,7 +119,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 				}
 
 				assert.Len(t, receivedMessages, len(messagesToSend)+1)
-				testSameEventsAndSameLocalOrder(t, receivedMessages[1:], messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages[1:], messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 9 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 9)
@@ -134,7 +134,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 3)
 				testConfig.nackResendSleep = 500 * time.Millisecond
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testConcurrentEventConsumption(testConfig)
+				closing, outputChannel, handler := testPartitionConcurrentConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
@@ -152,14 +152,14 @@ func TestConcurrentMessageHandler(t *testing.T) {
 				receivedMessages = append(receivedMessages, nackedMessage)
 				nackedMessage.Nack()
 
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 400*time.Millisecond, outputChannel)
 
 				message := <-outputChannel
 				receivedMessages = append(receivedMessages, message)
 				message.Ack()
 				assert.Len(t, receivedMessages, len(messagesToSend)+1)
-				testSameEventsAndSameLocalOrder(t, receivedMessages[1:], messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages[1:], messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 1 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 1)
@@ -172,7 +172,7 @@ func TestConcurrentMessageHandler(t *testing.T) {
 	t.Run("closing without events", func(t *testing.T) {
 		testConfig := newTestConfig(false, 3)
 		testConfig.nackResendSleep = 500 * time.Millisecond
-		closing, outputChannel, handler := testConcurrentEventConsumption(testConfig)
+		closing, outputChannel, handler := testPartitionConcurrentConsumption(testConfig)
 		defer close(outputChannel)
 		messagesToSend := make([]*sarama.ConsumerMessage, 0, 3)
 		kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -188,12 +188,12 @@ func TestConcurrentMessageHandler(t *testing.T) {
 	})
 }
 
-func testConcurrentEventConsumption(
+func testPartitionConcurrentConsumption(
 	testConfig testConfig,
 ) (chan<- struct{}, chan *message.Message, MessageHandler) {
 	outputChannel := make(chan *message.Message)
 	closing := make(chan struct{})
-	handler := NewConcurrentMessageHandler(
+	handler := NewPartitionConcurrentMessageHandler(
 		outputChannel,
 		DefaultMarshaler{},
 		watermill.NopLogger{},

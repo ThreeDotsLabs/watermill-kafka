@@ -30,10 +30,10 @@ func TestBatchMessageHandler(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Run("consumes all events in order even if coming from different partitions", func(t *testing.T) {
+			t.Run("consumes all messages in order even if coming from different partitions", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 3)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -54,14 +54,14 @@ func TestBatchMessageHandler(t *testing.T) {
 				receivedMessages = append(receivedMessages, <-outputChannel)
 				receivedMessages = append(receivedMessages, <-outputChannel)
 
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 				// we ACK the messages
 				for _, msg := range receivedMessages {
 					msg.Ack()
 				}
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
@@ -71,10 +71,10 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("sends events if less than batch size", func(t *testing.T) {
+			t.Run("sends messages if less than batch size", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 10)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -95,14 +95,14 @@ func TestBatchMessageHandler(t *testing.T) {
 				receivedMessages = append(receivedMessages, <-outputChannel)
 				receivedMessages = append(receivedMessages, <-outputChannel)
 
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 				// we ACK the messages
 				for _, msg := range receivedMessages {
 					msg.Ack()
 				}
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
@@ -112,10 +112,10 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("processes all events when there are more than the batch size", func(t *testing.T) {
+			t.Run("processes all messages when there are more than the batch size", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 2)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -140,14 +140,14 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 				receivedMessages = append(receivedMessages, <-outputChannel)
 
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 				// we ACK the messages
 				for _, msg := range receivedMessages {
 					msg.Ack()
 				}
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 3 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 3)
@@ -157,10 +157,10 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("NACKed events are re-sent (and following events too)", func(t *testing.T) {
+			t.Run("NACKed messages are re-sent (and following messages too)", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 10)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -190,12 +190,12 @@ func TestBatchMessageHandler(t *testing.T) {
 				receivedMessages = append(receivedMessages, <-outputChannel)
 				receivedMessages = append(receivedMessages, <-outputChannel)
 
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 100*time.Millisecond, outputChannel)
 
 				receivedMessages[0].Ack()
 				receivedMessages[1].Ack()
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend[2:])
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend[2:])
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 2 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 2)
@@ -204,10 +204,10 @@ func TestBatchMessageHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("ACKed event are not re-sent if a NACKed follows", func(t *testing.T) {
+			t.Run("ACKed message are not re-sent if a NACKed follows", func(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 10)
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -233,11 +233,11 @@ func TestBatchMessageHandler(t *testing.T) {
 				receivedMessages = receivedMessages[:0]
 				receivedMessages = append(receivedMessages, <-outputChannel)
 				receivedMessages = append(receivedMessages, <-outputChannel)
-				// we do not get more events because the batch was not processed yet
+				// we do not get more messages because the batch was not processed yet
 				waitOrFail(t, 100*time.Millisecond, outputChannel)
 				receivedMessages[0].Ack()
 				receivedMessages[1].Ack()
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend[1:])
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend[1:])
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 2 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 2)
@@ -250,7 +250,7 @@ func TestBatchMessageHandler(t *testing.T) {
 				testConfig := newTestConfig(test.hasConsumerGroup, 10)
 				testConfig.nackResendSleep = 500 * time.Millisecond
 				sess, mock := consumerGroupSession(testConfig)
-				closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+				closing, outputChannel, handler := testBatchConsumption(testConfig)
 				defer close(closing)
 				defer close(outputChannel)
 				kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -271,7 +271,7 @@ func TestBatchMessageHandler(t *testing.T) {
 				receivedMessages = receivedMessages[:0]
 				receivedMessages = append(receivedMessages, <-outputChannel)
 				receivedMessages[0].Ack()
-				testSameEventsAndSameLocalOrder(t, receivedMessages, messagesToSend)
+				testSameMessagesAndLocalOrder(t, receivedMessages, messagesToSend)
 				if sess != nil {
 					assert.Eventually(t, func() bool { return len(mock.Calls) == 1 }, 1*time.Second, 10*time.Millisecond)
 					mock.AssertNumberOfCalls(t, "MarkMessage", 1)
@@ -280,9 +280,9 @@ func TestBatchMessageHandler(t *testing.T) {
 			})
 		})
 
-		t.Run("closing without events", func(t *testing.T) {
+		t.Run("closing without messages", func(t *testing.T) {
 			testConfig := newTestConfig(test.hasConsumerGroup, 10)
-			closing, outputChannel, handler := testBatchEventConsumption(testConfig)
+			closing, outputChannel, handler := testBatchConsumption(testConfig)
 			defer close(outputChannel)
 
 			kafkaMessages := make(chan *sarama.ConsumerMessage, 10)
@@ -355,7 +355,7 @@ type testConfig struct {
 	hasCountingConsumerGroup bool
 }
 
-func testBatchEventConsumption(
+func testBatchConsumption(
 	testConfig testConfig,
 ) (chan<- struct{}, chan *message.Message, MessageHandler) {
 	outputChannel := make(chan *message.Message)
@@ -402,7 +402,7 @@ func generateMessage(topic string, partition, offset int) *sarama.ConsumerMessag
 	}
 }
 
-func testSameEventsAndSameLocalOrder(t testing.TB, receivedMessages []*message.Message, messages []*sarama.ConsumerMessage) {
+func testSameMessagesAndLocalOrder(t testing.TB, receivedMessages []*message.Message, messages []*sarama.ConsumerMessage) {
 	require.Len(t, messages, len(receivedMessages))
 	messagesPerPartition := make(map[int32][]*message.Message)
 	consumerMessagesPerPartition := make(map[int32][]*sarama.ConsumerMessage)
@@ -430,7 +430,7 @@ func testSameEventsAndSameLocalOrder(t testing.TB, receivedMessages []*message.M
 		if consumerMessages, ok := consumerMessagesPerPartition[partition]; ok {
 			require.Len(t, messages, len(consumerMessages))
 			for idx, msg := range messages {
-				assertSameEvent(t, msg, consumerMessages[idx])
+				assertSameMessage(t, msg, consumerMessages[idx])
 			}
 		} else {
 			t.Fatal(fmt.Sprintf("No messages for partition: %d", partition))
@@ -439,7 +439,7 @@ func testSameEventsAndSameLocalOrder(t testing.TB, receivedMessages []*message.M
 	}
 }
 
-func assertSameEvent(t testing.TB, message *message.Message, kafkaMessage *sarama.ConsumerMessage) {
+func assertSameMessage(t testing.TB, message *message.Message, kafkaMessage *sarama.ConsumerMessage) {
 	assert.Equal(t, string(kafkaMessage.Headers[0].Value), message.UUID)
 	offset, _ := MessagePartitionOffsetFromCtx(message.Context())
 	assert.Equal(t, offset, kafkaMessage.Offset)
@@ -450,7 +450,7 @@ func assertSameEvent(t testing.TB, message *message.Message, kafkaMessage *saram
 func waitOrFail(t testing.TB, duration time.Duration, outputChannel <-chan *message.Message) {
 	select {
 	case <-outputChannel:
-		t.Fatal("should not receive an event yet")
+		t.Fatal("should not receive an message yet")
 		t.FailNow()
 	case <-time.After(duration):
 	}

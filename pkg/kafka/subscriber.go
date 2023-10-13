@@ -94,8 +94,8 @@ type SubscriberConfig struct {
 
 // BatchConsumerConfig configuration to be applied when the selected type of
 // consumption is batch.
-// Batch consumption means that the maxBatchSizeEvents will be read or maxWaitTime waited
-// the events will then be sent to the output channel.
+// Batch consumption means that the MaxBatchSize will be read or maxWaitTime waited
+// the messages will then be sent to the output channel.
 // ACK / NACK are handled properly to ensure at-least-once consumption.
 type BatchConsumerConfig struct {
 	// MaxBatchSize max amount of elements the batch will contain.
@@ -113,7 +113,7 @@ const (
 	// Default is a model when only one message is sent to the customer and customer needs to ACK the message
 	// to receive the next.
 	Default ConsumerModel = iota
-	// Batch works by sending multiple events in a batch
+	// Batch works by sending multiple messages in a batch
 	Batch
 	// PartitionConcurrent has one message sent to the customer per partition and customer needs to ACK the message
 	// to receive the next message for the partition.
@@ -511,7 +511,7 @@ func (s *Subscriber) createMessagesHandler(output chan *message.Message) Message
 			s.config.NackResendSleep,
 		)
 	case PartitionConcurrent:
-		return NewConcurrentMessageHandler(output, s.config.Unmarshaler, s.logger, s.closing, s.config.NackResendSleep)
+		return NewPartitionConcurrentMessageHandler(output, s.config.Unmarshaler, s.logger, s.closing, s.config.NackResendSleep)
 	default:
 		panic("Invalid configuration")
 	}

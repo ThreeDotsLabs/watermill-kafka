@@ -127,7 +127,7 @@ func TestPublishSubscribe(t *testing.T) {
 		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name:          "no batch consumer config",
+			name:          "with default consumer",
 			consumerModel: kafka.Default,
 		},
 		{
@@ -135,7 +135,7 @@ func TestPublishSubscribe(t *testing.T) {
 			consumerModel: kafka.Batch,
 		},
 		{
-			name:          "with concurrent config",
+			name:          "with partition concurrent config",
 			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
@@ -168,11 +168,11 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name:          "no batch consumer config",
+			name:          "with default consumer",
 			consumerModel: kafka.Default,
 		},
 		{
-			name:          "with concurrent config",
+			name:          "with partition concurrent config",
 			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
@@ -216,7 +216,7 @@ func TestNoGroupSubscriber(t *testing.T) {
 		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name:          "no batch consumer config",
+			name:          "with default consumer",
 			consumerModel: kafka.Default,
 		},
 		{
@@ -224,7 +224,7 @@ func TestNoGroupSubscriber(t *testing.T) {
 			consumerModel: kafka.Batch,
 		},
 		{
-			name:          "with concurrent config",
+			name:          "with partition concurrent config",
 			consumerModel: kafka.PartitionConcurrent,
 		},
 	}
@@ -252,7 +252,7 @@ func TestCtxValues(t *testing.T) {
 		consumerModel kafka.ConsumerModel
 	}{
 		{
-			name:          "no batch consumer config",
+			name:          "with default consumer",
 			consumerModel: kafka.Default,
 		},
 		{
@@ -260,7 +260,7 @@ func TestCtxValues(t *testing.T) {
 			consumerModel: kafka.Batch,
 		},
 		{
-			name:          "with concurrent config",
+			name:          "with partition concurrent config",
 			consumerModel: kafka.PartitionConcurrent,
 		},
 	}

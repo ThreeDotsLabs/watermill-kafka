@@ -9,11 +9,11 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 )
 
-// concurrentMessageHandler works by fetching messages and pushing them to the channel as it goes.
+// partitionConcurrentMessageHandler works by fetching messages and pushing them to the channel as it goes.
 // Because the messages are received in order, they're introduced in order in the channel.
 // When a NACK is received, all the messages after it for the same topic / partition are pushed again.
 // It can be configured to have at most N messages in-flight.
-type concurrentMessageHandler struct {
+type partitionConcurrentMessageHandler struct {
 	outputChannel chan<- *message.Message
 
 	nackResendSleep time.Duration
@@ -23,14 +23,14 @@ type concurrentMessageHandler struct {
 	unmarshaler Unmarshaler
 }
 
-func NewConcurrentMessageHandler(
+func NewPartitionConcurrentMessageHandler(
 	outputChannel chan<- *message.Message,
 	unmarshaler Unmarshaler,
 	logger watermill.LoggerAdapter,
 	closing chan struct{},
 	nackResendSleep time.Duration,
 ) MessageHandler {
-	return &concurrentMessageHandler{
+	return &partitionConcurrentMessageHandler{
 		outputChannel:   outputChannel,
 		nackResendSleep: nackResendSleep,
 		closing:         closing,
@@ -39,7 +39,7 @@ func NewConcurrentMessageHandler(
 	}
 }
 
-func (h *concurrentMessageHandler) ProcessMessages(
+func (h *partitionConcurrentMessageHandler) ProcessMessages(
 	ctx context.Context,
 	kafkaMessages <-chan *sarama.ConsumerMessage,
 	sess sarama.ConsumerGroupSession,
@@ -50,7 +50,7 @@ func (h *concurrentMessageHandler) ProcessMessages(
 	return handler.ProcessMessages(ctx, kafkaMessages, sess, logFields)
 }
 
-func (h *concurrentMessageHandler) addToMultiplexing(closing chan struct{}, outputChannel chan<- *message.Message) chan<- *message.Message {
+func (h *partitionConcurrentMessageHandler) addToMultiplexing(closing chan struct{}, outputChannel chan<- *message.Message) chan<- *message.Message {
 	multiplexing := make(chan *message.Message)
 	go func() {
 		defer close(multiplexing)
