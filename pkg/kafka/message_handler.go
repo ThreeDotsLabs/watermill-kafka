@@ -158,7 +158,7 @@ func addMessageContextFields(ctx context.Context, kafkaMsg *sarama.ConsumerMessa
 	result := setPartitionToCtx(ctx, kafkaMsg.Partition)
 	result = setPartitionOffsetToCtx(result, kafkaMsg.Offset)
 	result = setMessageTimestampToCtx(result, kafkaMsg.Timestamp)
-	ctx = setMessageKeyToCtx(ctx, kafkaMsg.Key)
+	result = setMessageKeyToCtx(result, kafkaMsg.Key)
 	return result
 }
 
