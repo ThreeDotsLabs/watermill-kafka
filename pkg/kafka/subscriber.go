@@ -518,6 +518,10 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 		case <-h.ctx.Done():
 			h.logger.Debug("Ctx was cancelled, stopping consumerGroupHandler", logFields)
 			return nil
+
+		case <-sess.Context().Done():
+			h.logger.Debug("Session ctx was cancelled, stopping consumerGroupHandler", logFields)
+			return nil
 		default:
 			continue
 		}
