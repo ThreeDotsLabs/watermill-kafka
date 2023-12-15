@@ -1,4 +1,5 @@
 # Watermill Kafka Pub/Sub
+
 <img align="right" width="200" src="https://threedots.tech/watermill-io/watermill-logo.png">
 
 [![CI Status](https://github.com/ThreeDotsLabs/watermill-kafka/actions/workflows/master.yml/badge.svg)](https://github.com/ThreeDotsLabs/watermill-kafka/actions/workflows/master.yml)
