@@ -19,6 +19,9 @@ test_stress:
 test_reconnect:
 	go test -tags=reconnect ./...
 
+test_codecov: up wait
+	go test -coverprofile=coverage.out -covermode=atomic ./...
+
 fmt:
 	go fmt ./...
 	goimports -l -w .
