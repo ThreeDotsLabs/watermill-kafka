@@ -1,8 +1,8 @@
 package kafka
 
 import (
-	"github.com/Shopify/sarama"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
+	"github.com/IBM/sarama"
+	"github.com/dnwe/otelsarama"
 )
 
 type SaramaTracer interface {
