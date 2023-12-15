@@ -1,4 +1,4 @@
-module github.com/ThreeDotsLabs/watermill-kafka/v2
+module github.com/ThreeDotsLabs/watermill-kafka/v3
 
 go 1.17
 
