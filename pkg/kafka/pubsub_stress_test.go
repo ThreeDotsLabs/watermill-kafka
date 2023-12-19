@@ -25,7 +25,7 @@ func TestPublishSubscribe_stress(t *testing.T) {
 			Persistent:          true,
 		},
 		createPubSub,
-		createPubSubWithConsumerGrup,
+		createPubSubWithConsumerGroup,
 	)
 }
 
@@ -39,6 +39,6 @@ func TestPublishSubscribe_ordered_stress(t *testing.T) {
 			Persistent:          true,
 		},
 		createPartitionedPubSub,
-		createPubSubWithConsumerGrup,
+		createPubSubWithConsumerGroup,
 	)
 }
