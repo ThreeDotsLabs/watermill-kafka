@@ -564,6 +564,9 @@ func (h messageHandler) processMessage(
 	msg.SetContext(ctx)
 	defer cancelCtx()
 
+	// check session has been canceled after rebalancing
+	sessionContext := sess.Context()
+
 	receivedMsgLogFields = receivedMsgLogFields.Add(watermill.LogFields{
 		"message_uuid": msg.UUID,
 	})
@@ -578,6 +581,9 @@ ResendLoop:
 			return nil
 		case <-ctx.Done():
 			h.logger.Trace("Closing, ctx cancelled before sent to consumer", receivedMsgLogFields)
+			return nil
+		case <-sessionContext.Done():
+			h.logger.Trace("Closing, session ctx cancelled before sent to consumer", receivedMsgLogFields)
 			return nil
 		}
 
@@ -603,6 +609,9 @@ ResendLoop:
 			return nil
 		case <-ctx.Done():
 			h.logger.Trace("Closing, ctx cancelled before ack", receivedMsgLogFields)
+			return nil
+		case <-sessionContext.Done():
+			h.logger.Trace("Closing, session ctx cancelled before ack", receivedMsgLogFields)
 			return nil
 		}
 	}
