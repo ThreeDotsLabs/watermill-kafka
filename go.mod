@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/IBM/sarama v1.42.1
 	github.com/ThreeDotsLabs/watermill v1.2.0
+	github.com/ThreeDotsLabs/watermill-kafka/v2 v2.5.0
 	github.com/dnwe/otelsarama v0.0.0-20231212173111-631a0a53d5d4
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
@@ -12,6 +13,7 @@ require (
 )
 
 require (
+	github.com/Shopify/sarama v1.38.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.4.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
@@ -34,6 +36,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama v0.31.0 // indirect
 	go.opentelemetry.io/otel v1.19.0 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	go.opentelemetry.io/otel/trace v1.19.0 // indirect
