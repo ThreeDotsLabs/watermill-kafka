@@ -388,7 +388,7 @@ func consumerGroupSession(testConfig testConfig) (sarama.ConsumerGroupSession, *
 
 func generateMessage(topic string, partition, offset int) *sarama.ConsumerMessage {
 	return &sarama.ConsumerMessage{
-		Topic:          "topic",
+		Topic:          topic,
 		Partition:      int32(partition),
 		Key:            []byte(fmt.Sprintf("key%d", offset)),
 		Value:          []byte(fmt.Sprintf("some-value-%d", offset)),
@@ -433,7 +433,7 @@ func testSameMessagesAndLocalOrder(t testing.TB, receivedMessages []*message.Mes
 				assertSameMessage(t, msg, consumerMessages[idx])
 			}
 		} else {
-			t.Fatal(fmt.Sprintf("No messages for partition: %d", partition))
+			t.Fatalf("No messages for partition: %d", partition)
 			t.Fail()
 		}
 	}

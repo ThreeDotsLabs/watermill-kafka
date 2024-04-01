@@ -48,7 +48,7 @@ func NewBatchedMessageHandler(
 		messageParser: messageParser{
 			unmarshaler: unmarshaler,
 		},
-		messages: make(chan *messageHolder, 0),
+		messages: make(chan *messageHolder),
 	}
 	go handler.startProcessing()
 	return handler
@@ -73,7 +73,6 @@ func (h *batchedMessageHandler) startProcessing() {
 				h.logger.Trace("Timer expired, sending already fetched messages.", logFields)
 			}
 			timerExpired = true
-			break
 		case <-h.closing:
 			h.logger.Debug("Subscriber is closing, stopping messageHandler", logFields)
 			return
@@ -95,7 +94,7 @@ func (h *batchedMessageHandler) startProcessing() {
 				time.Sleep(h.nackResendSleep)
 			}
 		}
-		timer.Reset(sendDeadline.Sub(time.Now()))
+		timer.Reset(time.Until(sendDeadline))
 	}
 }
 
@@ -158,24 +157,22 @@ func (h *batchedMessageHandler) processBatch(
 	for idx, waitChannel := range waitChannels {
 		msgHolder := buffer[idx]
 		h.logger.Trace("Waiting for message to be acked", msgHolder.logFields)
-		select {
-		case ack, ok := <-waitChannel:
-			h.logger.Info("Received ACK / NACK response or closed", msgHolder.logFields)
-			// it was aborted
-			if !ok {
-				h.logger.Info("Returning as messages were closed", msgHolder.logFields)
-				return nil, nil
-			}
-			topicAndPartition := fmt.Sprintf("%s-%d", msgHolder.kafkaMessage.Topic, msgHolder.kafkaMessage.Partition)
-			_, partitionNacked := nackedPartitions[topicAndPartition]
-			if !ack || partitionNacked {
-				newBuffer = append(newBuffer, msgHolder.Copy())
-				nackedPartitions[topicAndPartition] = struct{}{}
-				break
-			}
-			if !partitionNacked && ack {
-				lastComittableMessages[topicAndPartition] = msgHolder
-			}
+		ack, ok := <-waitChannel
+		h.logger.Info("Received ACK / NACK response or closed", msgHolder.logFields)
+		// it was aborted
+		if !ok {
+			h.logger.Info("Returning as messages were closed", msgHolder.logFields)
+			return nil, nil
+		}
+		topicAndPartition := fmt.Sprintf("%s-%d", msgHolder.kafkaMessage.Topic, msgHolder.kafkaMessage.Partition)
+		_, partitionNacked := nackedPartitions[topicAndPartition]
+		if !ack || partitionNacked {
+			newBuffer = append(newBuffer, msgHolder.Copy())
+			nackedPartitions[topicAndPartition] = struct{}{}
+			continue
+		}
+		if !partitionNacked && ack {
+			lastComittableMessages[topicAndPartition] = msgHolder
 		}
 	}
 
