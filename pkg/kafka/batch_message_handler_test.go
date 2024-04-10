@@ -347,6 +347,10 @@ type mockConsumerGroupSessionNoCalls struct {
 func (cgs *mockConsumerGroupSessionNoCalls) MarkMessage(msg *sarama.ConsumerMessage, metadata string) {
 }
 
+func (cgs *mockConsumerGroupSessionNoCalls) Context() context.Context {
+	return context.Background()
+}
+
 type testConfig struct {
 	batchWait                time.Duration
 	nackResendSleep          time.Duration

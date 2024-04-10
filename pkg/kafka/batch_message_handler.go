@@ -78,21 +78,23 @@ func (h *batchedMessageHandler) startProcessing() {
 			return
 		}
 		size := len(buffer)
-		if (timerExpired && size > 0) || size == int(h.maxBatchSize) {
+		if timerExpired || size == int(h.maxBatchSize) {
+			if size > 0 {
+				newBuffer, err := h.processBatch(buffer)
+				if err != nil {
+					return
+				}
+				if newBuffer == nil {
+					return
+				}
+				buffer = newBuffer
+				// if there are messages in the buffer, it means there was NACKs, so we wait
+				if len(buffer) > 0 && mustSleep {
+					time.Sleep(h.nackResendSleep)
+				}
+			}
 			sendDeadline = time.Now().Add(h.maxWaitTime)
 			timerExpired = false
-			newBuffer, err := h.processBatch(buffer)
-			if err != nil {
-				return
-			}
-			if newBuffer == nil {
-				return
-			}
-			buffer = newBuffer
-			// if there are messages in the buffer, it means there was NACKs, so we wait
-			if len(buffer) > 0 && mustSleep {
-				time.Sleep(h.nackResendSleep)
-			}
 		}
 		timer.Reset(time.Until(sendDeadline))
 	}
