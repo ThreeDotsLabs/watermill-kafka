@@ -27,7 +27,7 @@ func kafkaBrokers() []string {
 	return []string{"localhost:9091", "localhost:9092", "localhost:9093", "localhost:9094", "localhost:9095"}
 }
 
-func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (*kafka.Publisher, *kafka.Subscriber) {
+func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string, consumerModel kafka.ConsumerModel) (*kafka.Publisher, *kafka.Subscriber) {
 	logger := watermill.NewStdLogger(true, true)
 
 	var err error
@@ -72,6 +72,10 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 					NumPartitions:     8,
 					ReplicationFactor: 1,
 				},
+				BatchConsumerConfig: &kafka.BatchConsumerConfig{
+					MaxBatchSize: 10,
+					MaxWaitTime:  100 * time.Millisecond,
+				},
 			},
 			logger,
 		)
@@ -93,36 +97,65 @@ func generatePartitionKey(topic string, msg *message.Message) (string, error) {
 	return msg.Metadata.Get("partition_key"), nil
 }
 
-func createPubSubWithConsumerGrup(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
-	return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup)
+func createPubSubWithConsumerGroup(consumerModel kafka.ConsumerModel) func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
+	return func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
+		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, consumerModel)
+	}
 }
 
-func createPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
-	return createPubSubWithConsumerGrup(t, "test")
+func createPubSub(consumerModel kafka.ConsumerModel) func(t *testing.T) (message.Publisher, message.Subscriber) {
+	return func(t *testing.T) (message.Publisher, message.Subscriber) {
+		return createPubSubWithConsumerGroup(consumerModel)(t, "test")
+	}
 }
 
-func createPartitionedPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
-	return newPubSub(t, kafka.NewWithPartitioningMarshaler(generatePartitionKey), "test")
+func createPartitionedPubSub(consumerModel kafka.ConsumerModel) func(*testing.T) (message.Publisher, message.Subscriber) {
+	return func(t *testing.T) (message.Publisher, message.Subscriber) {
+		return newPubSub(t, kafka.NewWithPartitioningMarshaler(generatePartitionKey), "test", consumerModel)
+	}
 }
 
-func createNoGroupPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
-	return newPubSub(t, kafka.DefaultMarshaler{}, "")
+func createNoGroupPubSub(consumerModel kafka.ConsumerModel) func(t *testing.T) (message.Publisher, message.Subscriber) {
+	return func(t *testing.T) (message.Publisher, message.Subscriber) {
+		return newPubSub(t, kafka.DefaultMarshaler{}, "", consumerModel)
+	}
 }
 
 func TestPublishSubscribe(t *testing.T) {
-	features := tests.Features{
-		ConsumerGroups:      true,
-		ExactlyOnceDelivery: false,
-		GuaranteedOrder:     false,
-		Persistent:          true,
+	testCases := []struct {
+		name          string
+		consumerModel kafka.ConsumerModel
+	}{
+		{
+			name:          "with default consumer",
+			consumerModel: kafka.Default,
+		},
+		{
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with partition concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
+		},
 	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			features := tests.Features{
+				ConsumerGroups:      true,
+				ExactlyOnceDelivery: false,
+				GuaranteedOrder:     false,
+				Persistent:          true,
+			}
 
-	tests.TestPubSub(
-		t,
-		features,
-		createPubSub,
-		createPubSubWithConsumerGrup,
-	)
+			tests.TestPubSub(
+				t,
+				features,
+				createPubSub(test.consumerModel),
+				createPubSubWithConsumerGroup(test.consumerModel),
+			)
+		})
+	}
 }
 
 func TestPublishSubscribe_ordered(t *testing.T) {
@@ -130,84 +163,156 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
-	tests.TestPubSub(
-		t,
-		tests.Features{
-			ConsumerGroups:      true,
-			ExactlyOnceDelivery: false,
-			GuaranteedOrder:     true,
-			Persistent:          true,
+	testCases := []struct {
+		name          string
+		consumerModel kafka.ConsumerModel
+	}{
+		{
+			name:          "with default consumer",
+			consumerModel: kafka.Default,
 		},
-		createPartitionedPubSub,
-		createPubSubWithConsumerGrup,
-	)
+		{
+			name:          "with partition concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			tests.TestPubSub(
+				t,
+				tests.Features{
+					ConsumerGroups:      true,
+					ExactlyOnceDelivery: false,
+					GuaranteedOrder:     true,
+					Persistent:          true,
+				},
+				createPartitionedPubSub(test.consumerModel),
+				createPubSubWithConsumerGroup(test.consumerModel),
+			)
+		})
+	}
+
+	t.Run("with batch consumer config", func(t *testing.T) {
+		testBulkMessageHandlerPubSub(
+			t,
+			tests.Features{
+				ConsumerGroups:      true,
+				ExactlyOnceDelivery: false,
+				GuaranteedOrder:     true,
+				Persistent:          true,
+			},
+			createPartitionedPubSub(kafka.Batch),
+			createPubSubWithConsumerGroup(kafka.Batch),
+		)
+	})
 }
 
 func TestNoGroupSubscriber(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long tests")
 	}
-
-	tests.TestPubSub(
-		t,
-		tests.Features{
-			ConsumerGroups:                   false,
-			ExactlyOnceDelivery:              false,
-			GuaranteedOrder:                  false,
-			Persistent:                       true,
-			NewSubscriberReceivesOldMessages: true,
+	testCases := []struct {
+		name          string
+		consumerModel kafka.ConsumerModel
+	}{
+		{
+			name:          "with default consumer",
+			consumerModel: kafka.Default,
 		},
-		createNoGroupPubSub,
-		nil,
-	)
+		{
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with partition concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			tests.TestPubSub(
+				t,
+				tests.Features{
+					ConsumerGroups:                   false,
+					ExactlyOnceDelivery:              false,
+					GuaranteedOrder:                  false,
+					Persistent:                       true,
+					NewSubscriberReceivesOldMessages: true,
+				},
+				createNoGroupPubSub(test.consumerModel),
+				nil,
+			)
+		})
+	}
 }
 
 func TestCtxValues(t *testing.T) {
-	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "")
-	topicName := "topic_" + watermill.NewUUID()
-
-	var messagesToPublish []*message.Message
-
-	for i := 0; i < 20; i++ {
-		id := watermill.NewUUID()
-		messagesToPublish = append(messagesToPublish, message.NewMessage(id, nil))
+	tests := []struct {
+		name          string
+		consumerModel kafka.ConsumerModel
+	}{
+		{
+			name:          "with default consumer",
+			consumerModel: kafka.Default,
+		},
+		{
+			name:          "with batch config",
+			consumerModel: kafka.Batch,
+		},
+		{
+			name:          "with partition concurrent config",
+			consumerModel: kafka.PartitionConcurrent,
+		},
 	}
-	err := pub.Publish(topicName, messagesToPublish...)
-	require.NoError(t, err, "cannot publish message")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "", test.consumerModel)
+			topicName := "topic_" + watermill.NewUUID()
 
-	messages, err := sub.Subscribe(context.Background(), topicName)
-	require.NoError(t, err)
+			var messagesToPublish []*message.Message
 
-	receivedMessages, all := subscriber.BulkReadWithDeduplication(messages, len(messagesToPublish), time.Second*10)
-	require.True(t, all)
+			for i := 0; i < 20; i++ {
+				id := watermill.NewUUID()
+				messagesToPublish = append(messagesToPublish, message.NewMessage(id, nil))
+			}
+			err := pub.Publish(topicName, messagesToPublish...)
+			require.NoError(t, err, "cannot publish message")
 
-	expectedPartitionsOffsets := map[int32]int64{}
-	for _, msg := range receivedMessages {
-		partition, ok := kafka.MessagePartitionFromCtx(msg.Context())
-		assert.True(t, ok)
+			messages, err := sub.Subscribe(context.Background(), topicName)
+			require.NoError(t, err)
 
-		messagePartitionOffset, ok := kafka.MessagePartitionOffsetFromCtx(msg.Context())
-		assert.True(t, ok)
+			receivedMessages, all := subscriber.BulkReadWithDeduplication(messages, len(messagesToPublish), time.Second*10)
+			require.True(t, all)
 
-		kafkaMsgTimestamp, ok := kafka.MessageTimestampFromCtx(msg.Context())
-		assert.True(t, ok)
-		assert.NotZero(t, kafkaMsgTimestamp)
+			expectedPartitionsOffsets := map[int32]int64{}
+			for _, msg := range receivedMessages {
+				partition, ok := kafka.MessagePartitionFromCtx(msg.Context())
+				assert.True(t, ok)
 
-		_, ok = kafka.MessageKeyFromCtx(msg.Context())
-		assert.True(t, ok)
+				messagePartitionOffset, ok := kafka.MessagePartitionOffsetFromCtx(msg.Context())
+				assert.True(t, ok)
 
-		if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
-			// kafka partition offset is offset of the last message + 1
-			expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
-		}
+				kafkaMsgTimestamp, ok := kafka.MessageTimestampFromCtx(msg.Context())
+				assert.True(t, ok)
+				assert.NotZero(t, kafkaMsgTimestamp)
+
+				_, ok = kafka.MessageKeyFromCtx(msg.Context())
+				assert.True(t, ok)
+
+				if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
+					// kafka partition offset is offset of the last message + 1
+					expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
+				}
+			}
+			assert.NotEmpty(t, expectedPartitionsOffsets)
+
+			offsets, err := sub.PartitionOffset(topicName)
+			require.NoError(t, err)
+			assert.NotEmpty(t, offsets)
+
+			assert.EqualValues(t, expectedPartitionsOffsets, offsets)
+
+			require.NoError(t, pub.Close())
+		})
 	}
-	assert.NotEmpty(t, expectedPartitionsOffsets)
-
-	offsets, err := sub.PartitionOffset(topicName)
-	require.NoError(t, err)
-	assert.NotEmpty(t, offsets)
-
-	assert.EqualValues(t, expectedPartitionsOffsets, offsets)
-
-	require.NoError(t, pub.Close())
 }
