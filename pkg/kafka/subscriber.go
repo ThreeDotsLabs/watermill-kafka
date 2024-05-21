@@ -586,7 +586,12 @@ ResendLoop:
 				if sess.Context().Err() == nil {
 					sess.MarkMessage(kafkaMsg, "")
 				} else {
-					h.logger.Trace("Closing, session ctx cancelled before ack", receivedMsgLogFields)
+					logFields := receivedMsgLogFields.Add(
+						watermill.LogFields{
+							"err": sess.Context().Err().Error(),
+						},
+					)
+					h.logger.Trace("Closing, session ctx cancelled before ack", logFields)
 					return nil
 				}
 			}
