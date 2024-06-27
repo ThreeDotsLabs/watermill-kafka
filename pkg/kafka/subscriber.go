@@ -584,7 +584,17 @@ ResendLoop:
 		select {
 		case <-msg.Acked():
 			if sess != nil {
-				sess.MarkMessage(kafkaMsg, "")
+				if sess.Context().Err() == nil {
+					sess.MarkMessage(kafkaMsg, "")
+				} else {
+					logFields := receivedMsgLogFields.Add(
+						watermill.LogFields{
+							"err": sess.Context().Err().Error(),
+						},
+					)
+					h.logger.Trace("Closing, session ctx cancelled before ack", logFields)
+					return nil
+				}
 			}
 			h.logger.Trace("Message Acked", receivedMsgLogFields)
 			break ResendLoop
