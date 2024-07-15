@@ -211,3 +211,72 @@ func TestCtxValues(t *testing.T) {
 
 	require.NoError(t, pub.Close())
 }
+
+func readAfterRetries(messagesCh <-chan *message.Message, retriesN int, timeout time.Duration) (receivedMessage *message.Message, ok bool) {
+	retries := 0
+
+MessagesLoop:
+	for retries <= retriesN {
+		select {
+		case msg, ok := <-messagesCh:
+			if !ok {
+				break MessagesLoop
+			}
+
+			if retries > 0 {
+				msg.Ack()
+				return msg, true
+			}
+
+			msg.Nack()
+			retries++
+		case <-time.After(timeout):
+			break MessagesLoop
+		}
+	}
+
+	return nil, false
+}
+
+func TestCtxValuesAfterRetry(t *testing.T) {
+	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "")
+	topicName := "topic_" + watermill.NewUUID()
+
+	var messagesToPublish []*message.Message
+
+	id := watermill.NewUUID()
+	messagesToPublish = append(messagesToPublish, message.NewMessage(id, nil))
+
+	err := pub.Publish(topicName, messagesToPublish...)
+	require.NoError(t, err, "cannot publish message")
+
+	messages, err := sub.Subscribe(context.Background(), topicName)
+	require.NoError(t, err)
+
+	receivedMessage, ok := readAfterRetries(messages, 1, time.Second)
+
+	expectedPartitionsOffsets := map[int32]int64{}
+	partition, ok := kafka.MessagePartitionFromCtx(receivedMessage.Context())
+	assert.True(t, ok)
+
+	messagePartitionOffset, ok := kafka.MessagePartitionOffsetFromCtx(receivedMessage.Context())
+	assert.True(t, ok)
+
+	kafkaMsgTimestamp, ok := kafka.MessageTimestampFromCtx(receivedMessage.Context())
+	assert.True(t, ok)
+	assert.NotZero(t, kafkaMsgTimestamp)
+
+	if expectedPartitionsOffsets[partition] <= messagePartitionOffset {
+		// kafka partition offset is offset of the last message + 1
+		expectedPartitionsOffsets[partition] = messagePartitionOffset + 1
+	}
+	assert.NotEmpty(t, expectedPartitionsOffsets)
+
+	offsets, err := sub.PartitionOffset(topicName)
+	require.NoError(t, err)
+	assert.NotEmpty(t, offsets)
+
+	assert.EqualValues(t, expectedPartitionsOffsets, offsets)
+
+	require.NoError(t, pub.Close())
+}
