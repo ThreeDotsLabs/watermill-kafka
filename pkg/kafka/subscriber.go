@@ -592,10 +592,10 @@ ResendLoop:
 			if sess != nil {
 				if sess.Context().Err() == nil {
 					sess.MarkMessage(kafkaMsg, "")
-    			if !h.saramaConfig.Consumer.Offsets.AutoCommit.Enable {
+					if !h.saramaConfig.Consumer.Offsets.AutoCommit.Enable {
 						// AutoCommit is disabled, so we should commit offset explicitly
 						sess.Commit()
-     			}
+					}
 				} else {
 					logFields := receivedMsgLogFields.Add(
 						watermill.LogFields{
