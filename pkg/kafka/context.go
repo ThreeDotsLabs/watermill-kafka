@@ -12,6 +12,7 @@ const (
 	partitionContextKey
 	partitionOffsetContextKey
 	timestampContextKey
+	keyContextKey
 )
 
 func setPartitionToCtx(ctx context.Context, partition int32) context.Context {
@@ -42,4 +43,14 @@ func setMessageTimestampToCtx(ctx context.Context, timestamp time.Time) context.
 func MessageTimestampFromCtx(ctx context.Context) (time.Time, bool) {
 	timestamp, ok := ctx.Value(timestampContextKey).(time.Time)
 	return timestamp, ok
+}
+
+func setMessageKeyToCtx(ctx context.Context, key []byte) context.Context {
+	return context.WithValue(ctx, keyContextKey, key)
+}
+
+// MessageKeyFromCtx returns Kafka internal key of the consumed message
+func MessageKeyFromCtx(ctx context.Context) ([]byte, bool) {
+	key, ok := ctx.Value(keyContextKey).([]byte)
+	return key, ok
 }
