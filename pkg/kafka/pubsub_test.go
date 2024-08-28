@@ -284,6 +284,7 @@ func TestCtxValuesAfterRetry(t *testing.T) {
 	require.NoError(t, err)
 
 	receivedMessage, ok := readAfterRetries(messages, 1, time.Second)
+	assert.True(t, ok)
 
 	expectedPartitionsOffsets := map[int32]int64{}
 	partition, ok := kafka.MessagePartitionFromCtx(receivedMessage.Context())
