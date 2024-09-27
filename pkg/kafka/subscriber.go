@@ -67,8 +67,12 @@ type SubscriberConfig struct {
 	OverwriteSaramaConfig *sarama.Config
 
 	// Kafka consumer group.
-	// When empty, all messages from all partitions will be returned.
+	// If empty, the reading takes place by partitions.
 	ConsumerGroup string
+
+	// Kafka partitions to consume.
+	// If empty, all partitions will be consumed.
+	Partitions []int32
 
 	// How long after Nack message should be redelivered.
 	NackResendSleep time.Duration
@@ -388,9 +392,12 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 		consumer = tracer.WrapConsumer(consumer)
 	}
 
-	partitions, err := consumer.Partitions(topic)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get partitions")
+	partitions := s.config.Partitions
+	if len(s.config.Partitions) == 0 {
+		partitions, err = consumer.Partitions(topic)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot get partitions")
+		}
 	}
 
 	partitionConsumersWg := &sync.WaitGroup{}
