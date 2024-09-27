@@ -393,7 +393,7 @@ func (s *Subscriber) consumeWithoutConsumerGroups(
 	}
 
 	partitions := s.config.Partitions
-	if len(s.config.Partitions) == 0 {
+	if len(partitions) == 0 {
 		partitions, err = consumer.Partitions(topic)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot get partitions")
