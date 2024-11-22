@@ -467,6 +467,7 @@ func (s *Subscriber) consumePartition(
 func (s *Subscriber) createMessagesHandler(output chan *message.Message) messageHandler {
 	return messageHandler{
 		outputChannel:   output,
+		saramaConfig:    s.config.OverwriteSaramaConfig,
 		unmarshaler:     s.config.Unmarshaler,
 		nackResendSleep: s.config.NackResendSleep,
 		logger:          s.logger,
@@ -533,6 +534,7 @@ func (h consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cla
 type messageHandler struct {
 	outputChannel chan<- *message.Message
 	unmarshaler   Unmarshaler
+	saramaConfig  *sarama.Config
 
 	nackResendSleep time.Duration
 
@@ -590,6 +592,10 @@ ResendLoop:
 			if sess != nil {
 				if sess.Context().Err() == nil {
 					sess.MarkMessage(kafkaMsg, "")
+					if !h.saramaConfig.Consumer.Offsets.AutoCommit.Enable {
+						// AutoCommit is disabled, so we should commit offset explicitly
+						sess.Commit()
+					}
 				} else {
 					logFields := receivedMsgLogFields.Add(
 						watermill.LogFields{
