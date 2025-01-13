@@ -19,7 +19,7 @@ test_stress:
 test_reconnect:
 	go test -tags=reconnect ./...
 
-test_codecov: up wait
+test_codecov: up
 	go test -coverprofile=coverage.out -covermode=atomic ./...
 
 fmt:
@@ -28,9 +28,6 @@ fmt:
 
 build:
 	go build ./...
-
-wait:
-	go run github.com/ThreeDotsLabs/wait-for@latest localhost:9091 localhost:9092 localhost:9093 localhost:9094 localhost:9095
 
 update_watermill:
 	go get -u github.com/ThreeDotsLabs/watermill
