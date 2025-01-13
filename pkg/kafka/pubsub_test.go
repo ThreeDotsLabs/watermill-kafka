@@ -27,8 +27,13 @@ func kafkaBrokers() []string {
 	return []string{"localhost:9091", "localhost:9092", "localhost:9093"}
 }
 
-func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string) (*kafka.Publisher, *kafka.Subscriber) {
-	logger := watermill.NewStdLogger(true, true)
+func newPubSub(
+	t *testing.T,
+	marshaler kafka.MarshalerUnmarshaler,
+	consumerGroup string,
+	saramaOpts ...func(*sarama.Config),
+) (*kafka.Publisher, *kafka.Subscriber) {
+	logger := watermill.NewStdLogger(false, false)
 
 	var err error
 	var publisher *kafka.Publisher
@@ -58,6 +63,10 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 	saramaConfig.Consumer.Group.Heartbeat.Interval = time.Millisecond * 500
 	saramaConfig.Consumer.Group.Rebalance.Timeout = time.Second * 3
 
+	for _, o := range saramaOpts {
+		o(saramaConfig)
+	}
+
 	var subscriber *kafka.Subscriber
 
 	retriesLeft = 5
@@ -69,7 +78,7 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 				OverwriteSaramaConfig: saramaConfig,
 				ConsumerGroup:         consumerGroup,
 				InitializeTopicDetails: &sarama.TopicDetail{
-					NumPartitions:     8,
+					NumPartitions:     50,
 					ReplicationFactor: 1,
 				},
 			},
@@ -93,12 +102,12 @@ func generatePartitionKey(topic string, msg *message.Message) (string, error) {
 	return msg.Metadata.Get("partition_key"), nil
 }
 
-func createPubSubWithConsumerGrup(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
+func createPubSubWithConsumerGroup(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
 	return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup)
 }
 
 func createPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
-	return createPubSubWithConsumerGrup(t, "test")
+	return createPubSubWithConsumerGroup(t, "test")
 }
 
 func createPartitionedPubSub(t *testing.T) (message.Publisher, message.Subscriber) {
@@ -121,7 +130,7 @@ func TestPublishSubscribe(t *testing.T) {
 		t,
 		features,
 		createPubSub,
-		createPubSubWithConsumerGrup,
+		createPubSubWithConsumerGroup,
 	)
 }
 
@@ -129,6 +138,8 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long tests")
 	}
+
+	t.Parallel()
 
 	tests.TestPubSub(
 		t,
@@ -139,7 +150,7 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 			Persistent:          true,
 		},
 		createPartitionedPubSub,
-		createPubSubWithConsumerGrup,
+		createPubSubWithConsumerGroup,
 	)
 }
 
@@ -147,6 +158,8 @@ func TestNoGroupSubscriber(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long tests")
 	}
+
+	t.Parallel()
 
 	tests.TestPubSub(
 		t,
@@ -210,6 +223,36 @@ func TestCtxValues(t *testing.T) {
 	assert.EqualValues(t, expectedPartitionsOffsets, offsets)
 
 	require.NoError(t, pub.Close())
+}
+
+func TestPublishSubscribe_AutoCommitDisabled(t *testing.T) {
+	t.Parallel()
+
+	features := tests.Features{
+		ConsumerGroups:      true,
+		ExactlyOnceDelivery: false,
+		GuaranteedOrder:     false,
+		Persistent:          true,
+		// Disabled AutoCommit slow down Pub/Sub because of making commits synchronously
+		ForceShort: true,
+	}
+
+	pubSubConstructorWithConsumerGroup := func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
+		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, func(config *sarama.Config) {
+			// commit messages manually
+			config.Consumer.Offsets.AutoCommit.Enable = false
+		})
+	}
+	pubSubConstructor := func(t *testing.T) (message.Publisher, message.Subscriber) {
+		return pubSubConstructorWithConsumerGroup(t, "test")
+	}
+
+	tests.TestPubSub(
+		t,
+		features,
+		pubSubConstructor,
+		pubSubConstructorWithConsumerGroup,
+	)
 }
 
 func readAfterRetries(messagesCh <-chan *message.Message, retriesN int, timeout time.Duration) (receivedMessage *message.Message, ok bool) {
