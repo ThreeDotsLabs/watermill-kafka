@@ -27,8 +27,13 @@ func kafkaBrokers() []string {
 	return []string{"localhost:9091", "localhost:9092", "localhost:9093"}
 }
 
-func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string, saramaOpts ...func(*sarama.Config)) (*kafka.Publisher, *kafka.Subscriber) {
-	logger := watermill.NewStdLogger(true, true)
+func newPubSub(
+	t *testing.T,
+	marshaler kafka.MarshalerUnmarshaler,
+	consumerGroup string,
+	saramaOpts ...func(*sarama.Config),
+) (*kafka.Publisher, *kafka.Subscriber) {
+	logger := watermill.NewStdLogger(false, false)
 
 	var err error
 	var publisher *kafka.Publisher
@@ -73,7 +78,7 @@ func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup
 				OverwriteSaramaConfig: saramaConfig,
 				ConsumerGroup:         consumerGroup,
 				InitializeTopicDetails: &sarama.TopicDetail{
-					NumPartitions:     8,
+					NumPartitions:     50,
 					ReplicationFactor: 1,
 				},
 			},
@@ -134,6 +139,8 @@ func TestPublishSubscribe_ordered(t *testing.T) {
 		t.Skip("skipping long tests")
 	}
 
+	t.Parallel()
+
 	tests.TestPubSub(
 		t,
 		tests.Features{
@@ -151,6 +158,8 @@ func TestNoGroupSubscriber(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long tests")
 	}
+
+	t.Parallel()
 
 	tests.TestPubSub(
 		t,
@@ -217,11 +226,15 @@ func TestCtxValues(t *testing.T) {
 }
 
 func TestPublishSubscribe_AutoCommitDisabled(t *testing.T) {
+	t.Parallel()
+
 	features := tests.Features{
 		ConsumerGroups:      true,
 		ExactlyOnceDelivery: false,
 		GuaranteedOrder:     false,
 		Persistent:          true,
+		// Disabled AutoCommit slow down Pub/Sub because of making commits synchronously
+		ForceShort: true,
 	}
 
 	pubSubConstructorWithConsumerGroup := func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {

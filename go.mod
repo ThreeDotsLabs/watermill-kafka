@@ -6,7 +6,7 @@ toolchain go1.23.0
 
 require (
 	github.com/IBM/sarama v1.43.3
-	github.com/ThreeDotsLabs/watermill v1.3.7
+	github.com/ThreeDotsLabs/watermill v1.4.3
 	github.com/dnwe/otelsarama v0.0.0-20240308230250-9388d9d40bc0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
