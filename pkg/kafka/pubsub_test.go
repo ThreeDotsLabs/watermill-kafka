@@ -24,7 +24,7 @@ func kafkaBrokers() []string {
 	if brokers != "" {
 		return strings.Split(brokers, ",")
 	}
-	return []string{"localhost:9091", "localhost:9092", "localhost:9093", "localhost:9094", "localhost:9095"}
+	return []string{"localhost:9091", "localhost:9092", "localhost:9093"}
 }
 
 func newPubSub(t *testing.T, marshaler kafka.MarshalerUnmarshaler, consumerGroup string, saramaOpts ...func(*sarama.Config)) (*kafka.Publisher, *kafka.Subscriber) {
