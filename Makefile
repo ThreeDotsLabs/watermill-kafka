@@ -1,5 +1,5 @@
 up:
-	docker compose up -d
+	docker compose up -d --wait
 
 test:
 	go test ./...
