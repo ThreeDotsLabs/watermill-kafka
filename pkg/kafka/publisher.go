@@ -93,7 +93,6 @@ func DefaultSaramaSyncPublisherConfig() *sarama.Config {
 
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
-	config.Version = sarama.V1_0_0_0
 	config.Metadata.Retry.Backoff = time.Second * 2
 	config.ClientID = "watermill"
 
