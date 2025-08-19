@@ -127,7 +127,6 @@ func (c SubscriberConfig) Validate() error {
 //	// ...
 func DefaultSaramaSubscriberConfig() *sarama.Config {
 	config := sarama.NewConfig()
-	config.Version = sarama.V1_0_0_0
 	config.Consumer.Return.Errors = true
 	config.ClientID = "watermill"
 
