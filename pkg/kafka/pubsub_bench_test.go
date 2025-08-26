@@ -12,6 +12,18 @@ import (
 )
 
 func BenchmarkSubscriber(b *testing.B) {
+	runBenchmark(b, kafka.Default)
+}
+
+func BenchmarkSubscriberBatch(b *testing.B) {
+	runBenchmark(b, kafka.Batch)
+}
+
+func BenchmarkSubscriberPartitionConcurrent(b *testing.B) {
+	runBenchmark(b, kafka.PartitionConcurrent)
+}
+
+func runBenchmark(b *testing.B, consumerModel kafka.ConsumerModel) {
 	tests.BenchSubscriber(b, func(n int) (message.Publisher, message.Subscriber) {
 		logger := watermill.NopLogger{}
 
@@ -32,6 +44,7 @@ func BenchmarkSubscriber(b *testing.B) {
 				Unmarshaler:           kafka.DefaultMarshaler{},
 				OverwriteSaramaConfig: saramaConfig,
 				ConsumerGroup:         "test",
+				ConsumerModel:         consumerModel,
 			},
 			logger,
 		)
