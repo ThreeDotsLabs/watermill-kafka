@@ -1,5 +1,5 @@
 up:
-	docker-compose up -d
+	docker compose up -d --wait
 
 test:
 	go test ./...
@@ -14,12 +14,12 @@ test_race:
 	go test ./... -short -race
 
 test_stress:
-	go test -v -tags=stress -timeout=45m ./...
+	STRESS_TEST_COUNT=3 go test -v -tags=stress -timeout=45m ./...
 
 test_reconnect:
 	go test -tags=reconnect ./...
 
-test_codecov: up wait
+test_codecov: up
 	go test -coverprofile=coverage.out -covermode=atomic ./...
 
 fmt:
@@ -30,7 +30,6 @@ build:
 	go build ./...
 
 wait:
-	go run github.com/ThreeDotsLabs/wait-for@latest localhost:9091 localhost:9092 localhost:9093 localhost:9094 localhost:9095
 
 update_watermill:
 	go get -u github.com/ThreeDotsLabs/watermill
