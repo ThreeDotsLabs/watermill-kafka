@@ -78,6 +78,7 @@ func newPubSub(
 				Unmarshaler:           marshaler,
 				OverwriteSaramaConfig: saramaConfig,
 				ConsumerGroup:         consumerGroup,
+				ConsumerModel:         consumerModel,
 				InitializeTopicDetails: &sarama.TopicDetail{
 					NumPartitions:     50,
 					ReplicationFactor: 1,
@@ -345,7 +346,7 @@ func TestPublishSubscribe_AutoCommitDisabled(t *testing.T) {
 	}
 
 	pubSubConstructorWithConsumerGroup := func(t *testing.T, consumerGroup string) (message.Publisher, message.Subscriber) {
-		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, func(config *sarama.Config) {
+		return newPubSub(t, kafka.DefaultMarshaler{}, consumerGroup, kafka.Default, func(config *sarama.Config) {
 			// commit messages manually
 			config.Consumer.Offsets.AutoCommit.Enable = false
 		})
@@ -389,7 +390,7 @@ MessagesLoop:
 }
 
 func TestCtxValuesAfterRetry(t *testing.T) {
-	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "")
+	pub, sub := newPubSub(t, kafka.DefaultMarshaler{}, "", kafka.Default)
 	topicName := "topic_" + watermill.NewUUID()
 
 	var messagesToPublish []*message.Message
