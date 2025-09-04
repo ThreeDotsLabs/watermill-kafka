@@ -75,6 +75,9 @@ func (c *PublisherConfig) setDefaults() {
 	if c.OverwriteSaramaConfig == nil {
 		c.OverwriteSaramaConfig = DefaultSaramaSyncPublisherConfig()
 	}
+	if c.Marshaler == nil {
+		c.Marshaler = DefaultMarshaler{}
+	}
 }
 
 func (c PublisherConfig) Validate() error {

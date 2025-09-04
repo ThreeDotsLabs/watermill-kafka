@@ -101,6 +101,9 @@ func (c *SubscriberConfig) setDefaults() {
 	if c.ReconnectRetrySleep == 0 {
 		c.ReconnectRetrySleep = time.Second
 	}
+	if c.Unmarshaler == nil {
+		c.Unmarshaler = DefaultMarshaler{}
+	}
 }
 
 func (c SubscriberConfig) Validate() error {
