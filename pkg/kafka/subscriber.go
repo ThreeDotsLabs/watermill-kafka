@@ -78,7 +78,7 @@ type SubscriberConfig struct {
 
 	InitializeTopicDetails *sarama.TopicDetail
 
-	// If true, SubscribeInitialize won't wait for partition leaders to be elected after topic creation.
+	// If true, SubscribeInitialize won't wait for all partitions to be created across brokers.
 	// By default, SubscribeInitialize ensures the topic is ready for consumer operations before returning.
 	DoNotWaitForTopicCreation bool
 
