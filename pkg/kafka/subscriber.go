@@ -78,6 +78,13 @@ type SubscriberConfig struct {
 
 	InitializeTopicDetails *sarama.TopicDetail
 
+	// If true, SubscribeInitialize will wait until the topic is confirmed to exist in Kafka
+	// after creation. This ensures the topic is fully available before returning.
+	WaitForTopicCreation bool
+
+	// Timeout for waiting for topic creation when WaitForTopicCreation is true.
+	WaitForTopicCreationTimeout time.Duration
+
 	// If true then each consumed message will be wrapped with Opentelemetry tracing, provided by otelsarama.
 	//
 	// Deprecated: pass OTELSaramaTracer to Tracer field instead.
@@ -103,6 +110,9 @@ func (c *SubscriberConfig) setDefaults() {
 	}
 	if c.Unmarshaler == nil {
 		c.Unmarshaler = DefaultMarshaler{}
+	}
+	if c.WaitForTopicCreationTimeout == 0 {
+		c.WaitForTopicCreationTimeout = 30 * time.Second
 	}
 }
 
@@ -655,7 +665,63 @@ func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
 
 	s.logger.Info("Created Kafka topic", watermill.LogFields{"topic": topic})
 
+	if s.config.WaitForTopicCreation {
+		ctx, cancel := context.WithTimeout(context.Background(), s.config.WaitForTopicCreationTimeout)
+		defer cancel()
+
+		if err := s.waitForTopicCreation(ctx, clusterAdmin, topic); err != nil {
+			return errors.Wrap(err, "failed to wait for topic creation")
+		}
+	}
+
 	return nil
+}
+
+func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sarama.ClusterAdmin, topic string) error {
+	logFields := watermill.LogFields{"topic": topic}
+	s.logger.Debug("Waiting for topic creation to be confirmed", logFields)
+
+	pollInterval := 500 * time.Millisecond
+	attempt := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.Wrap(ctx.Err(), "context cancelled while waiting for topic creation")
+		default:
+		}
+
+		topics, err := clusterAdmin.ListTopics()
+		if err != nil {
+			s.logger.Debug("Failed to list topics", logFields.Add(watermill.LogFields{
+				"attempt": attempt + 1,
+				"error":   err.Error(),
+			}))
+		} else {
+			if _, exists := topics[topic]; exists {
+				s.logger.Debug("Topic creation confirmed", logFields.Add(watermill.LogFields{
+					"attempt": attempt + 1,
+				}))
+				return nil
+			}
+		}
+
+		s.logger.Debug("Topic not yet available, retrying", logFields.Add(watermill.LogFields{
+			"attempt":  attempt + 1,
+			"retry_in": pollInterval.String(),
+		}))
+
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Wrap(ctx.Err(), "context cancelled while waiting for topic creation")
+		case <-timer.C:
+			// Continue to next attempt
+		}
+
+		attempt++
+	}
 }
 
 type PartitionOffset map[int32]int64
