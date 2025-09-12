@@ -691,6 +691,7 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 		default:
 		}
 
+		// First check if topic exists
 		topics, err := clusterAdmin.ListTopics()
 		if err != nil {
 			s.logger.Debug("Failed to list topics", logFields.Add(watermill.LogFields{
@@ -698,11 +699,14 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 				"error":   err.Error(),
 			}))
 		} else {
-			if _, exists := topics[topic]; exists {
-				s.logger.Debug("Topic creation confirmed", logFields.Add(watermill.LogFields{
-					"attempt": attempt + 1,
-				}))
-				return nil
+			if topicDetail, exists := topics[topic]; exists {
+				// Topic exists, now verify partitions are ready
+				if s.verifyPartitionsReady(clusterAdmin, topic, topicDetail, logFields, attempt) {
+					s.logger.Debug("Topic and partitions creation confirmed", logFields.Add(watermill.LogFields{
+						"attempt": attempt + 1,
+					}))
+					return nil
+				}
 			}
 		}
 
@@ -722,6 +726,66 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 
 		attempt++
 	}
+}
+
+func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, topic string, topicDetail sarama.TopicDetail, logFields watermill.LogFields, attempt int) bool {
+	// Try to get partition metadata to verify they're actually ready
+	metadata, err := clusterAdmin.DescribeTopics([]string{topic})
+	if err != nil {
+		s.logger.Debug("Failed to describe topic", logFields.Add(watermill.LogFields{
+			"attempt": attempt + 1,
+			"error":   err.Error(),
+		}))
+		return false
+	}
+
+	if len(metadata) == 0 {
+		s.logger.Debug("No topic metadata returned", logFields.Add(watermill.LogFields{
+			"attempt": attempt + 1,
+		}))
+		return false
+	}
+
+	topicMeta := metadata[0]
+	if topicMeta.Err != sarama.ErrNoError {
+		s.logger.Debug("Topic metadata contains error", logFields.Add(watermill.LogFields{
+			"attempt": attempt + 1,
+			"error":   topicMeta.Err.Error(),
+		}))
+		return false
+	}
+
+	// Check that all expected partitions exist and have leaders
+	expectedPartitions := topicDetail.NumPartitions
+	if int32(len(topicMeta.Partitions)) < expectedPartitions {
+		s.logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
+			"attempt":            attempt + 1,
+			"expected_partitions": expectedPartitions,
+			"available_partitions": len(topicMeta.Partitions),
+		}))
+		return false
+	}
+
+	// Verify each partition has a leader
+	for _, partition := range topicMeta.Partitions {
+		if partition.Err != sarama.ErrNoError {
+			s.logger.Debug("Partition has error", logFields.Add(watermill.LogFields{
+				"attempt":   attempt + 1,
+				"partition": partition.ID,
+				"error":     partition.Err.Error(),
+			}))
+			return false
+		}
+		if partition.Leader == -1 {
+			s.logger.Debug("Partition has no leader", logFields.Add(watermill.LogFields{
+				"attempt":   attempt + 1,
+				"partition": partition.ID,
+			}))
+			return false
+		}
+	}
+
+	return true
 }
 
 type PartitionOffset map[int32]int64
