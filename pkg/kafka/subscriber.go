@@ -78,11 +78,11 @@ type SubscriberConfig struct {
 
 	InitializeTopicDetails *sarama.TopicDetail
 
-	// If true, SubscribeInitialize will wait until the topic is confirmed to exist in Kafka
-	// after creation. This ensures the topic is fully available before returning.
-	WaitForTopicCreation bool
+	// If true, SubscribeInitialize won't wait until the topic is confirmed to exist in Kafka
+	// after creation. By default, SubscribeInitialize ensures the topic is fully available before returning.
+	DoNotWaitForTopicCreation bool
 
-	// Timeout for waiting for topic creation when WaitForTopicCreation is true.
+	// Timeout for waiting for topic creation.
 	WaitForTopicCreationTimeout time.Duration
 
 	// If true then each consumed message will be wrapped with Opentelemetry tracing, provided by otelsarama.
@@ -112,7 +112,7 @@ func (c *SubscriberConfig) setDefaults() {
 		c.Unmarshaler = DefaultMarshaler{}
 	}
 	if c.WaitForTopicCreationTimeout == 0 {
-		c.WaitForTopicCreationTimeout = 30 * time.Second
+		c.WaitForTopicCreationTimeout = 10 * time.Second
 	}
 }
 
@@ -645,6 +645,10 @@ ResendLoop:
 }
 
 func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
+	return s.SubscribeInitializeWithContext(context.Background(), topic)
+}
+
+func (s *Subscriber) SubscribeInitializeWithContext(ctx context.Context, topic string) (err error) {
 	if s.config.InitializeTopicDetails == nil {
 		return errors.New("s.config.InitializeTopicDetails is empty, cannot SubscribeInitialize")
 	}
@@ -665,8 +669,8 @@ func (s *Subscriber) SubscribeInitialize(topic string) (err error) {
 
 	s.logger.Info("Created Kafka topic", watermill.LogFields{"topic": topic})
 
-	if s.config.WaitForTopicCreation {
-		ctx, cancel := context.WithTimeout(context.Background(), s.config.WaitForTopicCreationTimeout)
+	if !s.config.DoNotWaitForTopicCreation {
+		ctx, cancel := context.WithTimeout(ctx, s.config.WaitForTopicCreationTimeout)
 		defer cancel()
 
 		if err := s.waitForTopicCreation(ctx, clusterAdmin, topic); err != nil {
@@ -691,7 +695,6 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 		default:
 		}
 
-		// First check if topic exists
 		topics, err := clusterAdmin.ListTopics()
 		if err != nil {
 			s.logger.Debug("Failed to list topics", logFields.Add(watermill.LogFields{
@@ -700,7 +703,6 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 			}))
 		} else {
 			if topicDetail, exists := topics[topic]; exists {
-				// Topic exists, now verify partitions are ready
 				if s.verifyPartitionsReady(clusterAdmin, topic, topicDetail, logFields, attempt) {
 					s.logger.Debug("Topic and partitions creation confirmed", logFields.Add(watermill.LogFields{
 						"attempt": attempt + 1,
@@ -729,7 +731,6 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 }
 
 func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, topic string, topicDetail sarama.TopicDetail, logFields watermill.LogFields, attempt int) bool {
-	// Try to get partition metadata to verify they're actually ready
 	metadata, err := clusterAdmin.DescribeTopics([]string{topic})
 	if err != nil {
 		s.logger.Debug("Failed to describe topic", logFields.Add(watermill.LogFields{
@@ -747,7 +748,7 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 	}
 
 	topicMeta := metadata[0]
-	if topicMeta.Err != sarama.ErrNoError {
+	if !errors.Is(topicMeta.Err, sarama.ErrNoError) {
 		s.logger.Debug("Topic metadata contains error", logFields.Add(watermill.LogFields{
 			"attempt": attempt + 1,
 			"error":   topicMeta.Err.Error(),
@@ -759,8 +760,8 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 	expectedPartitions := topicDetail.NumPartitions
 	if int32(len(topicMeta.Partitions)) < expectedPartitions {
 		s.logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
-			"attempt":            attempt + 1,
-			"expected_partitions": expectedPartitions,
+			"attempt":              attempt + 1,
+			"expected_partitions":  expectedPartitions,
 			"available_partitions": len(topicMeta.Partitions),
 		}))
 		return false
@@ -768,7 +769,7 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 
 	// Verify each partition has a leader
 	for _, partition := range topicMeta.Partitions {
-		if partition.Err != sarama.ErrNoError {
+		if !errors.Is(partition.Err, sarama.ErrNoError) {
 			s.logger.Debug("Partition has error", logFields.Add(watermill.LogFields{
 				"attempt":   attempt + 1,
 				"partition": partition.ID,
