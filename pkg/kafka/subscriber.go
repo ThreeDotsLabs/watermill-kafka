@@ -78,8 +78,8 @@ type SubscriberConfig struct {
 
 	InitializeTopicDetails *sarama.TopicDetail
 
-	// If true, SubscribeInitialize won't wait until the topic is confirmed to exist in Kafka
-	// after creation. By default, SubscribeInitialize ensures the topic is fully available before returning.
+	// If true, SubscribeInitialize won't wait for partition leaders to be elected after topic creation.
+	// By default, SubscribeInitialize ensures the topic is ready for consumer operations before returning.
 	DoNotWaitForTopicCreation bool
 
 	// Timeout for waiting for topic creation.
