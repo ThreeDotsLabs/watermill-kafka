@@ -756,6 +756,13 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 		return false
 	}
 
+	logger.Debug("Partitions log", logFields.Add(watermill.LogFields{
+		"expected_partitions":  topicDetail.NumPartitions,
+		"topic_detail":         topicDetail,
+		"available_partitions": len(topicMeta.Partitions),
+		"topic_metadata":       topicMeta,
+	}))
+
 	// Check that all expected partitions exist and have leaders
 	if topicDetail.NumPartitions > 0 {
 		if int32(len(topicMeta.Partitions)) < topicDetail.NumPartitions {
