@@ -757,14 +757,25 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 	}
 
 	// Check that all expected partitions exist and have leaders
-	expectedPartitions := topicDetail.NumPartitions
-	if int32(len(topicMeta.Partitions)) < expectedPartitions {
-		s.logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
-			"attempt":              attempt + 1,
-			"expected_partitions":  expectedPartitions,
-			"available_partitions": len(topicMeta.Partitions),
-		}))
-		return false
+	if topicDetail.NumPartitions > 0 {
+		// Explicit partition count specified
+		if int32(len(topicMeta.Partitions)) < topicDetail.NumPartitions {
+			s.logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
+				"attempt":              attempt + 1,
+				"expected_partitions":  topicDetail.NumPartitions,
+				"available_partitions": len(topicMeta.Partitions),
+			}))
+			return false
+		}
+	} else {
+		// NumPartitions is -1 (default/manual assignment)
+		// Just verify at least 1 partition exists
+		if len(topicMeta.Partitions) == 0 {
+			s.logger.Debug("Topic has no partitions yet", logFields.Add(watermill.LogFields{
+				"attempt": attempt + 1,
+			}))
+			return false
+		}
 	}
 
 	// Verify each partition has a leader
