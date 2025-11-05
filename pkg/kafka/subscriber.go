@@ -702,8 +702,8 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 				"error":   err.Error(),
 			}))
 		} else {
-			if topicDetail, exists := topics[topic]; exists {
-				if s.verifyPartitionsReady(clusterAdmin, topic, topicDetail, logFields, attempt) {
+			if _, exists := topics[topic]; exists {
+				if s.verifyPartitionsReady(clusterAdmin, topic, *s.config.InitializeTopicDetails, logFields, attempt) {
 					s.logger.Debug("Topic and partitions creation confirmed", logFields.Add(watermill.LogFields{
 						"attempt": attempt + 1,
 					}))
