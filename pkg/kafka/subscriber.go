@@ -731,37 +731,35 @@ func (s *Subscriber) waitForTopicCreation(ctx context.Context, clusterAdmin sara
 }
 
 func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, topic string, topicDetail sarama.TopicDetail, logFields watermill.LogFields, attempt int) bool {
+	logger := s.logger.With(watermill.LogFields{
+		"attempt": attempt + 1,
+	})
+
 	metadata, err := clusterAdmin.DescribeTopics([]string{topic})
 	if err != nil {
-		s.logger.Debug("Failed to describe topic", logFields.Add(watermill.LogFields{
-			"attempt": attempt + 1,
-			"error":   err.Error(),
+		logger.Debug("Failed to describe topic", logFields.Add(watermill.LogFields{
+			"error": err.Error(),
 		}))
 		return false
 	}
 
 	if len(metadata) == 0 {
-		s.logger.Debug("No topic metadata returned", logFields.Add(watermill.LogFields{
-			"attempt": attempt + 1,
-		}))
+		logger.Debug("No topic metadata returned", nil)
 		return false
 	}
 
 	topicMeta := metadata[0]
 	if !errors.Is(topicMeta.Err, sarama.ErrNoError) {
-		s.logger.Debug("Topic metadata contains error", logFields.Add(watermill.LogFields{
-			"attempt": attempt + 1,
-			"error":   topicMeta.Err.Error(),
+		logger.Debug("Topic metadata contains error", logFields.Add(watermill.LogFields{
+			"error": topicMeta.Err.Error(),
 		}))
 		return false
 	}
 
 	// Check that all expected partitions exist and have leaders
 	if topicDetail.NumPartitions > 0 {
-		// Explicit partition count specified
 		if int32(len(topicMeta.Partitions)) < topicDetail.NumPartitions {
-			s.logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
-				"attempt":              attempt + 1,
+			logger.Debug("Not all partitions available yet", logFields.Add(watermill.LogFields{
 				"expected_partitions":  topicDetail.NumPartitions,
 				"available_partitions": len(topicMeta.Partitions),
 			}))
@@ -771,9 +769,7 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 		// NumPartitions is -1 (default/manual assignment)
 		// Just verify at least 1 partition exists
 		if len(topicMeta.Partitions) == 0 {
-			s.logger.Debug("Topic has no partitions yet", logFields.Add(watermill.LogFields{
-				"attempt": attempt + 1,
-			}))
+			logger.Debug("Topic has no partitions yet", nil)
 			return false
 		}
 	}
@@ -781,16 +777,14 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 	// Verify each partition has a leader
 	for _, partition := range topicMeta.Partitions {
 		if !errors.Is(partition.Err, sarama.ErrNoError) {
-			s.logger.Debug("Partition has error", logFields.Add(watermill.LogFields{
-				"attempt":   attempt + 1,
+			logger.Debug("Partition has error", logFields.Add(watermill.LogFields{
 				"partition": partition.ID,
 				"error":     partition.Err.Error(),
 			}))
 			return false
 		}
 		if partition.Leader == -1 {
-			s.logger.Debug("Partition has no leader", logFields.Add(watermill.LogFields{
-				"attempt":   attempt + 1,
+			logger.Debug("Partition has no leader", logFields.Add(watermill.LogFields{
 				"partition": partition.ID,
 			}))
 			return false
