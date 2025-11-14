@@ -39,16 +39,12 @@ func TestDefaultMarshaler_UnmarshalWithContext(t *testing.T) {
 
 	consumerMsg := producerToConsumerMessage(producerMsg)
 
-	type ctxType string
-
-	const ctxKey ctxType = "test-key"
-	const ctxVal ctxType = "test-value"
-	ctx := context.WithValue(context.Background(), ctxKey, ctxVal)
+	ctx := context.WithValue(context.Background(), ctxType("test-key"), ctxType("test-value"))
 
 	unmarshaled, err := m.UnmarshalWithContext(ctx, consumerMsg)
 	require.NoError(t, err)
 	require.NotNil(t, unmarshaled.Context())
-	assert.Equal(t, ctxVal, unmarshaled.Context().Value(ctxKey))
+	assert.Equal(t, ctxType("test-value"), unmarshaled.Context().Value(ctxType("test-key")))
 
 	assert.True(t, msg.Equals(unmarshaled))
 }
