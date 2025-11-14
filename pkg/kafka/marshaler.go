@@ -1,6 +1,8 @@
 package kafka
 
 import (
+	"context"
+
 	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/pkg/errors"
@@ -21,6 +23,10 @@ type Unmarshaler interface {
 type MarshalerUnmarshaler interface {
 	Marshaler
 	Unmarshaler
+}
+
+type ContextUnmarshaler interface {
+	UnmarshalWithContext(context.Context, *sarama.ConsumerMessage) (*message.Message, error)
 }
 
 type DefaultMarshaler struct{}
@@ -63,6 +69,15 @@ func (DefaultMarshaler) Unmarshal(kafkaMsg *sarama.ConsumerMessage) (*message.Me
 	msg := message.NewMessage(messageID, kafkaMsg.Value)
 	msg.Metadata = metadata
 
+	return msg, nil
+}
+
+func (DefaultMarshaler) UnmarshalWithContext(ctx context.Context, kafkaMsg *sarama.ConsumerMessage) (*message.Message, error) {
+	msg, err := DefaultMarshaler{}.Unmarshal(kafkaMsg)
+	if err != nil {
+		return nil, err
+	}
+	msg.SetContext(ctx)
 	return msg, nil
 }
 
