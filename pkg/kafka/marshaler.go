@@ -1,6 +1,8 @@
 package kafka
 
 import (
+	"context"
+
 	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/pkg/errors"
@@ -14,6 +16,9 @@ type Marshaler interface {
 }
 
 // Unmarshaler unmarshals Kafka's message to Watermill's message.
+// NOTE: Context set here using the Unmarshal function will not be retained;
+// use ContextUnmarshaler's UnmarshalWithContext function to set context on
+// unmarshal.
 type Unmarshaler interface {
 	Unmarshal(*sarama.ConsumerMessage) (*message.Message, error)
 }
@@ -21,6 +26,14 @@ type Unmarshaler interface {
 type MarshalerUnmarshaler interface {
 	Marshaler
 	Unmarshaler
+}
+
+// ContextUnmarshaler unmarshals Kafka's message to Watermill's message
+// passing the base context into the UnmarshalWithContext function.
+// NOTE: If you are implementing this you MUST set context in this function
+// or it will be lost.
+type ContextUnmarshaler interface {
+	UnmarshalWithContext(context.Context, *sarama.ConsumerMessage) (*message.Message, error)
 }
 
 type DefaultMarshaler struct{}
@@ -63,6 +76,15 @@ func (DefaultMarshaler) Unmarshal(kafkaMsg *sarama.ConsumerMessage) (*message.Me
 	msg := message.NewMessage(messageID, kafkaMsg.Value)
 	msg.Metadata = metadata
 
+	return msg, nil
+}
+
+func (m DefaultMarshaler) UnmarshalWithContext(ctx context.Context, kafkaMsg *sarama.ConsumerMessage) (*message.Message, error) {
+	msg, err := m.Unmarshal(kafkaMsg)
+	if err != nil {
+		return nil, err
+	}
+	msg.SetContext(ctx)
 	return msg, nil
 }
 

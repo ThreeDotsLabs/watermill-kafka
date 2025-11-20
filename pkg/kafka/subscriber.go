@@ -572,15 +572,24 @@ func (h messageHandler) processMessage(
 	ctx = setMessageTimestampToCtx(ctx, kafkaMsg.Timestamp)
 	ctx = setMessageKeyToCtx(ctx, kafkaMsg.Key)
 
-	msg, err := h.unmarshaler.Unmarshal(kafkaMsg)
+	ctx, cancelCtx := context.WithCancel(ctx)
+	defer cancelCtx()
+
+	var (
+		msg *message.Message
+		err error
+	)
+	if contextUnmarshaler, ok := h.unmarshaler.(ContextUnmarshaler); ok {
+		msg, err = contextUnmarshaler.UnmarshalWithContext(ctx, kafkaMsg)
+		ctx = msg.Context()
+	} else {
+		msg, err = h.unmarshaler.Unmarshal(kafkaMsg)
+		msg.SetContext(ctx)
+	}
 	if err != nil {
 		// resend will make no sense, stopping consumerGroupHandler
 		return errors.Wrap(err, "message unmarshal failed")
 	}
-
-	ctx, cancelCtx := context.WithCancel(ctx)
-	msg.SetContext(ctx)
-	defer cancelCtx()
 
 	receivedMsgLogFields = receivedMsgLogFields.Add(watermill.LogFields{
 		"message_uuid": msg.UUID,
