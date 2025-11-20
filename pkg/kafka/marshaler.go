@@ -16,6 +16,9 @@ type Marshaler interface {
 }
 
 // Unmarshaler unmarshals Kafka's message to Watermill's message.
+// NOTE: Context set here using the Unmarshal function will not be retained;
+// use ContextUnmarshaler's UnmarshalWithContext function to set context on
+// unmarshal.
 type Unmarshaler interface {
 	Unmarshal(*sarama.ConsumerMessage) (*message.Message, error)
 }
@@ -25,6 +28,10 @@ type MarshalerUnmarshaler interface {
 	Unmarshaler
 }
 
+// ContextUnmarshaler unmarshals Kafka's message to Watermill's message
+// passing the base context into the UnmarshalWithContext function.
+// NOTE: If you are implementing this you MUST set context in this function
+// or it will be lost.
 type ContextUnmarshaler interface {
 	UnmarshalWithContext(context.Context, *sarama.ConsumerMessage) (*message.Message, error)
 }
