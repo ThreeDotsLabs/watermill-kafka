@@ -72,8 +72,8 @@ func (DefaultMarshaler) Unmarshal(kafkaMsg *sarama.ConsumerMessage) (*message.Me
 	return msg, nil
 }
 
-func (DefaultMarshaler) UnmarshalWithContext(ctx context.Context, kafkaMsg *sarama.ConsumerMessage) (*message.Message, error) {
-	msg, err := DefaultMarshaler{}.Unmarshal(kafkaMsg)
+func (m DefaultMarshaler) UnmarshalWithContext(ctx context.Context, kafkaMsg *sarama.ConsumerMessage) (*message.Message, error) {
+	msg, err := m.Unmarshal(kafkaMsg)
 	if err != nil {
 		return nil, err
 	}
