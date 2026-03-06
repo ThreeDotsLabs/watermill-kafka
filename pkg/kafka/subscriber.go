@@ -93,6 +93,13 @@ type SubscriberConfig struct {
 	// Tracer is used to trace Kafka messages.
 	// If nil, then no tracing will be used.
 	Tracer SaramaTracer
+
+	// Client is an optional external sarama.Client to use for connecting to Kafka.
+	// When provided, the subscriber will use this client instead of creating a new one.
+	// This is useful for sharing a single client across multiple subscribers to reduce
+	// the number of connections to Kafka.
+	// The client's lifecycle is managed externally and will not be closed when the subscriber is closed.
+	Client sarama.Client
 }
 
 // NoSleep can be set to SubscriberConfig.NackResendSleep and SubscriberConfig.ReconnectRetrySleep.
@@ -117,7 +124,7 @@ func (c *SubscriberConfig) setDefaults() {
 }
 
 func (c SubscriberConfig) Validate() error {
-	if len(c.Brokers) == 0 {
+	if c.Client == nil && len(c.Brokers) == 0 {
 		return errors.New("missing brokers")
 	}
 	if c.Unmarshaler == nil {
@@ -235,10 +242,17 @@ func (s *Subscriber) consumeMessages(
 ) (consumeMessagesClosed chan struct{}, err error) {
 	s.logger.Info("Starting consuming", logFields)
 
-	// Start with a client
-	client, err := sarama.NewClient(s.config.Brokers, s.config.OverwriteSaramaConfig)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot create new Sarama client")
+	// Use the provided client or create a new one
+	client := s.config.Client
+	clientCreatedByUs := false
+
+	if client == nil {
+		// Start with a client
+		client, err = sarama.NewClient(s.config.Brokers, s.config.OverwriteSaramaConfig)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot create new Sarama client")
+		}
+		clientCreatedByUs = true
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -268,10 +282,13 @@ func (s *Subscriber) consumeMessages(
 
 	go func() {
 		<-consumeMessagesClosed
-		if err := client.Close(); err != nil {
-			s.logger.Error("Cannot close client", err, logFields)
-		} else {
-			s.logger.Debug("Client closed", logFields)
+		// Only close the client if we created it
+		if clientCreatedByUs {
+			if err := client.Close(); err != nil {
+				s.logger.Error("Cannot close client", err, logFields)
+			} else {
+				s.logger.Debug("Client closed", logFields)
+			}
 		}
 	}()
 
@@ -792,16 +809,25 @@ func (s *Subscriber) verifyPartitionsReady(clusterAdmin sarama.ClusterAdmin, top
 type PartitionOffset map[int32]int64
 
 func (s *Subscriber) PartitionOffset(topic string) (PartitionOffset, error) {
-	client, err := sarama.NewClient(s.config.Brokers, s.config.OverwriteSaramaConfig)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot create new Sarama client")
+	client := s.config.Client
+	clientCreatedByUs := false
+	var err error
+
+	if client == nil {
+		client, err = sarama.NewClient(s.config.Brokers, s.config.OverwriteSaramaConfig)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot create new Sarama client")
+		}
+		clientCreatedByUs = true
 	}
 
-	defer func() {
-		if closeErr := client.Close(); closeErr != nil {
-			err = multierror.Append(err, closeErr)
-		}
-	}()
+	if clientCreatedByUs {
+		defer func() {
+			if closeErr := client.Close(); closeErr != nil {
+				err = multierror.Append(err, closeErr)
+			}
+		}()
+	}
 
 	partitions, err := client.Partitions(topic)
 	if err != nil {
