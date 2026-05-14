@@ -17,9 +17,11 @@ services:
       - --seeds kafka-1:33145,kafka-2:33145,kafka-3:33145
       - --mode dev-container
       - --smp 1
+      - --memory 1500M
       - --default-log-level=warn
       - --set redpanda.topic_partitions_per_shard=10000
-      - --set redpanda.log_segment_size=4194304
+      - --set redpanda.topic_memory_per_partition=51200
+      - --set redpanda.log_segment_size=1048576
     volumes:
       - kafka-1-data:/var/lib/redpanda/data
     ports:
@@ -40,9 +42,11 @@ services:
       - --seeds kafka-1:33145,kafka-2:33145,kafka-3:33145
       - --mode dev-container
       - --smp 1
+      - --memory 1500M
       - --default-log-level=warn
       - --set redpanda.topic_partitions_per_shard=10000
-      - --set redpanda.log_segment_size=4194304
+      - --set redpanda.topic_memory_per_partition=51200
+      - --set redpanda.log_segment_size=1048576
     volumes:
       - kafka-2-data:/var/lib/redpanda/data
     ports:
@@ -63,9 +67,11 @@ services:
       - --seeds kafka-1:33145,kafka-2:33145,kafka-3:33145
       - --mode dev-container
       - --smp 1
+      - --memory 1500M
       - --default-log-level=warn
       - --set redpanda.topic_partitions_per_shard=10000
-      - --set redpanda.log_segment_size=4194304
+      - --set redpanda.topic_memory_per_partition=51200
+      - --set redpanda.log_segment_size=1048576
     volumes:
       - kafka-3-data:/var/lib/redpanda/data
     ports:
