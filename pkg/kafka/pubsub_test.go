@@ -24,7 +24,7 @@ func kafkaBrokers() []string {
 	if brokers != "" {
 		return strings.Split(brokers, ",")
 	}
-	return []string{"localhost:9091", "localhost:9092", "localhost:9093"}
+	return []string{"localhost:19092", "localhost:19093", "localhost:19094"}
 }
 
 func newPubSub(
