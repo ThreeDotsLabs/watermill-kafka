@@ -336,7 +336,9 @@ func (s *Subscriber) consumeGroupMessages(
 			}
 
 			if err := group.Consume(ctx, []string{topic}, handler); err != nil {
-				if err == sarama.ErrUnknown {
+				if errors.Is(err, context.Canceled) || errors.Is(err, sarama.ErrClosedConsumerGroup) {
+					s.logger.Debug("Group consume stopped due to shutdown or context cancellation", logFields.Add(watermill.LogFields{"err": err.Error()}))
+				} else if err == sarama.ErrUnknown {
 					// this is info, because it is often just noise
 					s.logger.Info("Received unknown Sarama error", logFields.Add(watermill.LogFields{"err": err.Error()}))
 				} else {
