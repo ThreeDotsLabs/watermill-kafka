@@ -212,16 +212,21 @@ func (s *Subscriber) handleReconnects(
 			s.logger.Debug("Not closing, reconnecting", logFields)
 		}
 
+		// Only an unexpected consumer exit reaches here (the shutdown cases return
+		// above), so back off before every reconnect, not just when consumeMessages
+		// returns an error synchronously. consumeMessages can return (groupClosed, nil)
+		// while group.Consume keeps failing asynchronously, which would otherwise spin
+		// reconnects with no delay.
+		if s.config.ReconnectRetrySleep != NoSleep {
+			time.Sleep(s.config.ReconnectRetrySleep)
+		}
+
 		s.logger.Info("Reconnecting consumer", logFields)
 
 		var err error
 		consumeClosed, err = s.consumeMessages(ctx, topic, output, logFields)
 		if err != nil {
 			s.logger.Error("Cannot reconnect messages consumer", err, logFields)
-
-			if s.config.ReconnectRetrySleep != NoSleep {
-				time.Sleep(s.config.ReconnectRetrySleep)
-			}
 			continue
 		}
 	}
