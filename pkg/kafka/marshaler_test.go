@@ -1,6 +1,7 @@
 package kafka_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/IBM/sarama"
@@ -25,6 +26,27 @@ func TestDefaultMarshaler_MarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, msg.Equals(unmarshaledMsg))
+}
+
+func TestDefaultMarshaler_UnmarshalWithContext(t *testing.T) {
+	m := kafka.DefaultMarshaler{}
+
+	msg := message.NewMessage(watermill.NewUUID(), []byte("payload"))
+	msg.Metadata.Set("foo", "bar")
+
+	producerMsg, err := m.Marshal("topic", msg)
+	require.NoError(t, err)
+
+	consumerMsg := producerToConsumerMessage(producerMsg)
+
+	ctx := context.WithValue(context.Background(), ctxType("test-key"), ctxType("test-value"))
+
+	unmarshaled, err := m.UnmarshalWithContext(ctx, consumerMsg)
+	require.NoError(t, err)
+	require.NotNil(t, unmarshaled.Context())
+	assert.Equal(t, ctxType("test-value"), unmarshaled.Context().Value(ctxType("test-key")))
+
+	assert.True(t, msg.Equals(unmarshaled))
 }
 
 func BenchmarkDefaultMarshaler_Marshal(b *testing.B) {
