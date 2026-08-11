@@ -324,3 +324,34 @@ func TestCtxValuesAfterRetry(t *testing.T) {
 
 	require.NoError(t, pub.Close())
 }
+
+// TestSubscriberConfig_Validate tests that SubscriberConfig validation works correctly
+// with the new Client field.
+func TestSubscriberConfig_Validate(t *testing.T) {
+	t.Run("fails without brokers and without client", func(t *testing.T) {
+		config := kafka.SubscriberConfig{
+			Unmarshaler: kafka.DefaultMarshaler{},
+		}
+		err := config.Validate()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing brokers")
+	})
+
+	t.Run("passes with brokers and without client", func(t *testing.T) {
+		config := kafka.SubscriberConfig{
+			Brokers:     []string{"localhost:9092"},
+			Unmarshaler: kafka.DefaultMarshaler{},
+		}
+		err := config.Validate()
+		assert.NoError(t, err)
+	})
+
+	t.Run("fails without unmarshaler", func(t *testing.T) {
+		config := kafka.SubscriberConfig{
+			Brokers: []string{"localhost:9092"},
+		}
+		err := config.Validate()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing unmarshaler")
+	})
+}
