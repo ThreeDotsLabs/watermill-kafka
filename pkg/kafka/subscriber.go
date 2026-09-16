@@ -273,6 +273,11 @@ func (s *Subscriber) consumeMessages(
 
 	go func() {
 		<-consumeMessagesClosed
+		// The watcher goroutine started above blocks on s.closing for the whole life of
+		// the subscriber. This consume cycle is over and nobody will touch its context
+		// again, so cancel it here to release that watcher. Without this every reconnect
+		// leaves one more watcher parked until the subscriber itself is closed.
+		cancel()
 		if err := client.Close(); err != nil {
 			s.logger.Error("Cannot close client", err, logFields)
 		} else {
