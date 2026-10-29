@@ -12,6 +12,13 @@ type SaramaTracer interface {
 	WrapSyncProducer(*sarama.Config, sarama.SyncProducer) sarama.SyncProducer
 }
 
+// SaramaAsyncTracer is an optional interface that a SaramaTracer can implement
+// to also trace async producers (see PublisherConfig.AsyncProducer).
+// It is a separate interface to keep SaramaTracer backward compatible.
+type SaramaAsyncTracer interface {
+	WrapAsyncProducer(*sarama.Config, sarama.AsyncProducer) sarama.AsyncProducer
+}
+
 type OTELSaramaTracer struct{}
 
 func NewOTELSaramaTracer() SaramaTracer {
@@ -32,4 +39,8 @@ func (t OTELSaramaTracer) WrapPartitionConsumer(pc sarama.PartitionConsumer) sar
 
 func (t OTELSaramaTracer) WrapSyncProducer(cfg *sarama.Config, p sarama.SyncProducer) sarama.SyncProducer {
 	return otelsarama.WrapSyncProducer(cfg, p)
+}
+
+func (t OTELSaramaTracer) WrapAsyncProducer(cfg *sarama.Config, p sarama.AsyncProducer) sarama.AsyncProducer {
+	return otelsarama.WrapAsyncProducer(cfg, p)
 }
